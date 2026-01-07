@@ -102,8 +102,22 @@ alertmanager:
         - receiver: 'null'
           matchers:
             - alertname = "Watchdog"
+        - receiver: 'null'
+          matchers:
+            - alertname = "InfoInhibitor"
         - receiver: 'discord'
           continue: true
+    inhibit_rules:
+      - source_matchers:
+          - severity = "info"
+        target_matchers:
+          - severity = "info"
+        equal: ['namespace', 'alertname']
+      - source_matchers:
+          - alertname = "InfoInhibitor"
+        target_matchers:
+          - severity = "info"
+        equal: ['namespace']
     receivers:
       - name: 'null'
       - name: 'discord'
