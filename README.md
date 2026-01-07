@@ -1,6 +1,6 @@
 <table>
   <tr>
-    <td><img src="assets/jigga-xyz.png" alt="jigga.xyz" width="150"></td>
+    <td><img src="assets/jigga-xyz.png" alt="jigga.xyz" width="300"></td>
     <td>
       <h2>jigga.xyz</h2>
       <p><strong>K3s homelab on Proxmox</strong></p>
