@@ -1,0 +1,37 @@
+# Pre-configured PostgreSQL server connection
+# NOTE: CloudNativePG disables password auth for 'postgres' superuser by default
+# Use 'app' user instead - credentials in postgres-cluster-app secret
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pgadmin-servers
+  namespace: pgadmin
+  labels:
+    app.kubernetes.io/name: pgadmin
+    app.kubernetes.io/component: database-ui
+data:
+  servers.json: |
+    {
+      "Servers": {
+        "1": {
+          "Name": "Homelab PostgreSQL",
+          "Group": "Servers",
+          "Host": "postgres-cluster-rw.postgres.svc.cluster.local",
+          "Port": 5432,
+          "MaintenanceDB": "postgres",
+          "Username": "app",
+          "SSLMode": "prefer",
+          "Comment": "CloudNativePG cluster - Primary (Read/Write)"
+        },
+        "2": {
+          "Name": "Homelab PostgreSQL (Read-Only)",
+          "Group": "Servers",
+          "Host": "postgres-cluster-ro.postgres.svc.cluster.local",
+          "Port": 5432,
+          "MaintenanceDB": "postgres",
+          "Username": "app",
+          "SSLMode": "prefer",
+          "Comment": "CloudNativePG cluster - Replicas (Read-Only)"
+        }
+      }
+    }

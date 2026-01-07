@@ -1,0 +1,64 @@
+---
+# Ansible Playbook: Check for available updates on Proxmox VE nodes
+# Usage: ansible-playbook -i inventory.yaml playbooks/proxmox-check-updates.yaml
+#
+# This playbook only refreshes apt cache and shows available updates.
+# No packages are installed or upgraded.
+
+- name: Check for updates on Proxmox VE nodes
+  hosts: proxmox
+  become: true
+
+  tasks:
+    - name: Display node information
+      ansible.builtin.debug:
+        msg: "Checking updates on: {{ inventory_hostname }} ({{ ansible_host }})"
+
+    - name: Get current Proxmox version
+      ansible.builtin.command: pveversion
+      register: pve_version
+      changed_when: false
+
+    - name: Display current Proxmox version
+      ansible.builtin.debug:
+        msg: "{{ pve_version.stdout }}"
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Check for available updates
+      ansible.builtin.shell: apt list --upgradable 2>/dev/null | grep -v "^Listing"
+      register: upgradable_packages
+      changed_when: false
+      failed_when: false
+
+    - name: Check for security updates
+      ansible.builtin.shell: apt list --upgradable 2>/dev/null | grep -i security || true
+      register: security_updates
+      changed_when: false
+      failed_when: false
+
+    - name: Check if reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
+    - name: Display update summary
+      vars:
+        summary:
+          - "═══════════════════════════════════════════════════════"
+          - "{{ inventory_hostname }} - Update Summary"
+          - "═══════════════════════════════════════════════════════"
+          - "Version: {{ pve_version.stdout }}"
+          - "Updates available: {{ upgradable_packages.stdout_lines | default([]) | length }}"
+          - "Security updates: {{ security_updates.stdout_lines | default([]) | length }}"
+          - "Reboot pending: {{ '⚠️  YES' if reboot_required.stat.exists else '✅ No' }}"
+          - "═══════════════════════════════════════════════════════"
+      ansible.builtin.debug:
+        msg: "{{ summary }}"
+
+    - name: List available updates
+      ansible.builtin.debug:
+        msg: "{{ upgradable_packages.stdout_lines }}"
+      when: upgradable_packages.stdout_lines | default([]) | length > 0

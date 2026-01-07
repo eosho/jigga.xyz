@@ -1,0 +1,110 @@
+#cloud-config
+# Template for generating cloud-init user data for K3s cluster nodes
+
+hostname: ${hostname}
+
+# User configuration
+users:
+  - name: ${vm_user}
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - ${ssh_key}
+
+package_update: true
+package_upgrade: false
+
+# Packages are pre-installed in the template image via virt-customize
+
+runcmd:
+  - [apt-get, update]
+  - [apt-get, install, -y, -f]
+  - [apt-get, install, -y, qemu-guest-agent, nfs-common]
+  - [apt-get, upgrade, -y]
+  - [systemctl, enable, qemu-guest-agent]
+  - [systemctl, start, qemu-guest-agent]
+  - [systemctl, enable, rpcbind]
+  - [systemctl, start, rpcbind]
+  - [mkdir, -p, /mnt/nfs]
+  - [chmod, "777", /mnt/nfs]
+  - [mkdir, -p, /etc/rancher/k3s]
+  - [sh, -c, "echo 'K3S_TOKEN=${k3s_token}' > /etc/rancher/k3s/config.env"]
+  - [sh, -c, "/usr/local/bin/k3s-install.sh"]
+
+write_files:
+  - path: /usr/local/bin/k3s-install.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -e
+
+      IS_CONTROL="${is_control}"
+      K3S_TOKEN="${k3s_token}"
+      API_SERVER="${api_server_ip}"
+      VM_USER="${vm_user}"
+      K3S_VERSION="${k3s_version}"
+
+      # Wait for network to be fully up
+      echo "Waiting for network interfaces..."
+      sleep 10
+
+      # Find the correct interface for flannel (the one with 10.x.x.x IP)
+      FLANNEL_IFACE=`ip -4 addr show | grep "10\." | awk '{print $NF}' | head -1`
+      if [ -z "$FLANNEL_IFACE" ]; then
+        echo "WARNING: Could not find interface with 10.x.x.x IP, defaulting to eth1"
+        FLANNEL_IFACE="eth1"
+      fi
+      echo "Using flannel interface: $FLANNEL_IFACE"
+
+      if [ "$IS_CONTROL" = "true" ]; then
+        echo "Installing K3s control plane..."
+        echo "K3S_KUBECONFIG_MODE=644" >> /etc/rancher/k3s/config.env
+        export K3S_TOKEN="$K3S_TOKEN"
+        # Disable servicelb (using MetalLB instead), Traefik is enabled (K3s managed)
+        # Enable etcd metrics exposure for monitoring
+        export INSTALL_K3S_EXEC="server --cluster-init --flannel-iface=$FLANNEL_IFACE --write-kubeconfig-mode=644 --tls-san=$API_SERVER --disable=servicelb --etcd-expose-metrics"
+        [ -n "$K3S_VERSION" ] && export INSTALL_K3S_VERSION="$K3S_VERSION"
+        curl -sfL https://get.k3s.io | sh -
+
+        # Wait for k3s to be ready
+        sleep 15
+
+        # Setup kubeconfig for user
+        mkdir -p /home/$VM_USER/.kube
+        cp /etc/rancher/k3s/k3s.yaml /home/$VM_USER/.kube/config
+        IP_ADDR=`hostname -I | awk '{print $1}'`
+        sed -i "s/127.0.0.1/$IP_ADDR/g" /home/$VM_USER/.kube/config
+        chown -R $VM_USER:$VM_USER /home/$VM_USER/.kube
+        chmod 600 /home/$VM_USER/.kube/config
+      else
+        echo "Waiting for control plane at $API_SERVER:6443..."
+        READY=false
+        for i in `seq 1 60`; do
+          # K3s 1.33+ secured all endpoints - check if API responds (401 is fine, means it's running)
+          HTTP_CODE=`curl -sk -o /dev/null -w '%%{http_code}' --connect-timeout 5 https://$API_SERVER:6443/version 2>/dev/null || echo "000"`
+          if [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "200" ]; then
+            echo "Control plane is ready! (HTTP $HTTP_CODE)"
+            READY=true
+            break
+          fi
+          echo "Attempt $i/60: Control plane not ready (HTTP $HTTP_CODE), waiting 10s..."
+          sleep 10
+        done
+
+        if [ "$READY" = "false" ]; then
+          echo "ERROR: Control plane never became ready after 10 minutes!"
+          echo "Check if $API_SERVER:6443 is reachable from this node"
+          exit 1
+        fi
+
+        echo "Installing K3s agent..."
+        echo "K3S_URL=https://$API_SERVER:6443" >> /etc/rancher/k3s/config.env
+        export K3S_TOKEN="$K3S_TOKEN"
+        export K3S_URL="https://$API_SERVER:6443"
+        export INSTALL_K3S_EXEC="agent --flannel-iface=$FLANNEL_IFACE"
+        [ -n "$K3S_VERSION" ] && export INSTALL_K3S_VERSION="$K3S_VERSION"
+        curl -sfL https://get.k3s.io | sh -
+      fi
+
+      echo "K3s installation completed for `hostname`"

@@ -1,0 +1,32 @@
+# MetalLB Configuration for LAN Access
+# Assigns IPs from the LAN range (192.168.7.x) for direct access
+
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: lan-pool
+  namespace: metallb-system
+  labels:
+    app.kubernetes.io/name: metallb
+    app.kubernetes.io/component: config
+spec:
+  addresses:
+    # Reserve a range on your LAN for LoadBalancer services
+    # Make sure these IPs are NOT in your DHCP range
+    - 192.168.7.230-192.168.7.235
+  autoAssign: true
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: lan-l2
+  namespace: metallb-system
+  labels:
+    app.kubernetes.io/name: metallb
+    app.kubernetes.io/component: config
+spec:
+  ipAddressPools:
+    - lan-pool
+  # Advertise on the LAN interface of the nodes
+  interfaces:
+    - eth0  # Public/LAN bridge interface

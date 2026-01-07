@@ -1,0 +1,37 @@
+---
+# =============================================================================
+# Configure UFW Firewall
+# =============================================================================
+# Reusable task file for setting up UFW firewall
+#
+# Required variables:
+#   firewall_allowed_ports: List of ports to allow (e.g., [{port: "22", proto: "tcp"}])
+#
+# Optional variables:
+#   firewall_default_incoming: Default policy for incoming (default: deny)
+#   firewall_default_outgoing: Default policy for outgoing (default: allow)
+
+- name: Install ufw
+  apt:
+    name: ufw
+    state: present
+
+- name: Allow SSH (always)
+  ufw:
+    rule: allow
+    port: "22"
+    proto: tcp
+
+- name: Allow configured ports
+  ufw:
+    rule: allow
+    port: "{{ item.port }}"
+    proto: "{{ item.proto | default('tcp') }}"
+  loop: "{{ firewall_allowed_ports | default([]) }}"
+  when: firewall_allowed_ports is defined
+
+- name: Enable UFW
+  ufw:
+    state: enabled
+    policy: "{{ firewall_default_incoming | default('deny') }}"
+    direction: incoming

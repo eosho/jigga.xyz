@@ -1,0 +1,26 @@
+---
+# Cluster hosts configuration
+# Used by: playbooks/update-hosts.yaml
+
+hosts_entries:
+  # K3s Cluster Nodes
+  - ip: "192.168.7.223"
+    hostname: "ichigo"
+  - ip: "192.168.7.224"
+    hostname: "naruto"
+  - ip: "192.168.7.225"
+    hostname: "tanjiro"
+
+  # Proxmox Nodes
+  - ip: "192.168.7.233"
+    hostname: "pve-alpha"
+  - ip: "192.168.7.234"
+    hostname: "pve-beta"
+  - ip: "192.168.7.235"
+    hostname: "pve-gamma"
+
+  # Service Hostnames (via Traefik)
+  - ip: "192.168.7.223"
+    hostname: "grafana.jigga.xyz"
+  - ip: "192.168.7.223"
+    hostname: "prometheus.jigga.xyz"

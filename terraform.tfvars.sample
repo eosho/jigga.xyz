@@ -1,0 +1,179 @@
+# =============================================================================
+# Terraform Variables - terraform.tfvars
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Proxmox API Configuration (REQUIRED - Update these values)
+# -----------------------------------------------------------------------------
+proxmox_api_url          = "https://YOUR_PROXMOX_IP:8006/api2/json"
+proxmox_api_token_id     = "terraform@pve!terraform"
+proxmox_api_token_secret = "YOUR_PROXMOX_API_TOKEN_SECRET"
+
+vm_os_template = 9001
+ssh_public_key = "~/.ssh/id_rsa.pub"
+
+# -----------------------------------------------------------------------------
+# Network Configuration (Dual-Bridge Setup)
+# -----------------------------------------------------------------------------
+public_bridge  = "vmbr0"       # LAN bridge - external access
+private_bridge = "vmbr1"       # Cluster bridge - internal K3s traffic
+public_gateway = "192.168.1.1"
+
+# -----------------------------------------------------------------------------
+# K3s Cluster Configuration
+# -----------------------------------------------------------------------------
+k3s_server_name = "ichigo"
+k3s_server_ip   = "10.0.0.10" # Control plane node IP for etcd metrics endpoint
+vm_user         = "groot"
+k3s_token       = "YOUR_K3S_TOKEN"  # Generate: openssl rand -base64 32
+
+# -----------------------------------------------------------------------------
+# VM Definitions - 3 VMs across 3 Proxmox nodes
+# All VMs use template 9001 on ceph-pool (shared storage)
+# -----------------------------------------------------------------------------
+vm_definitions = {
+  "ichigo" = {
+    target_node    = "pve-alpha"
+    template_id    = 9001       # Ceph template (shared)
+    cores          = 4
+    sockets        = 2
+    memory         = 16384      # 16GB
+    disk_size      = 128        # 128GB
+    public_ip      = "192.168.1.10/24"
+    private_ip     = "10.0.0.10/24"
+    public_gateway = "192.168.1.1"
+    is_control     = true
+  }
+  "naruto" = {
+    target_node    = "pve-beta"
+    template_id    = 9001       # Ceph template (shared)
+    cores          = 4
+    sockets        = 2
+    memory         = 16384
+    disk_size      = 128
+    public_ip      = "192.168.1.11/24"
+    private_ip     = "10.0.0.11/24"
+    public_gateway = "192.168.1.1"
+    is_control     = false
+  }
+  "tanjiro" = {
+    target_node    = "pve-gamma"
+    template_id    = 9001       # Ceph template (shared)
+    cores          = 4
+    sockets        = 1          # Reduced: pve-gamma max 4 vCPUs
+    memory         = 16384
+    disk_size      = 128
+    public_ip      = "192.168.1.12/24"
+    private_ip     = "10.0.0.12/24"
+    public_gateway = "192.168.1.1"
+    is_control     = false
+  }
+}
+
+# -----------------------------------------------------------------------------
+# Kubernetes Deployment (Two-Phase Deployment)
+# -----------------------------------------------------------------------------
+# Phase 1: Set to false - Deploys VMs and installs K3s
+# Phase 2: Set to true  - After VMs are ready and kubeconfig is copied
+deploy_kubernetes = true
+
+# -----------------------------------------------------------------------------
+# Ceph RBD CSI Storage Configuration
+# -----------------------------------------------------------------------------
+# Get these values from your Proxmox Ceph cluster:
+#   ceph fsid                              -> ceph_cluster_id
+#   ceph mon dump | grep -oP '\d+\.\d+\.\d+\.\d+'  -> ceph_monitors
+#   ceph auth get-key client.admin         -> ceph_admin_key (or create kubernetes user)
+#
+ceph_cluster_id = "YOUR_CEPH_CLUSTER_FSID"
+ceph_monitors   = ["192.168.1.100:6789", "192.168.1.101:6789", "192.168.1.102:6789"]
+ceph_admin_key  = "YOUR_CEPH_ADMIN_KEY"
+ceph_pool_name  = "kubernetes"
+
+# -----------------------------------------------------------------------------
+# MetalLB Configuration (LoadBalancer IPs)
+# -----------------------------------------------------------------------------
+metallb_addresses  = ["192.168.1.230-192.168.1.235"]  # 6 IPs for LoadBalancer services
+
+# -----------------------------------------------------------------------------
+# Monitoring & Grafana
+# -----------------------------------------------------------------------------
+grafana_admin_password = "change-me-to-secure-password"  # Change this!
+grafana_domain         = "grafana.int.example.com"
+alertmanager_discord_webhook_url = "change_me"
+
+# -----------------------------------------------------------------------------
+# TLS Configuration
+# -----------------------------------------------------------------------------
+enable_tls              = true        # Enable HTTPS
+email_address           = "admin@example.com"
+letsencrypt_environment = "prod"      # "prod" or "staging"
+
+# -----------------------------------------------------------------------------
+# Cloudflare DNS-01 Configuration (for internal services TLS)
+# -----------------------------------------------------------------------------
+enable_cloudflare_dns01 = true
+cloudflare_api_token    = "YOUR_CLOUDFLARE_API_TOKEN"  # Replace with your token
+cloudflare_zone_id      = "YOUR_CLOUDFLARE_ZONE_ID"
+dns_zone                = "example.com"
+internal_domain_suffix  = "int.example.com"
+
+# -----------------------------------------------------------------------------
+# ArgoCD Configuration (GitOps)
+# -----------------------------------------------------------------------------
+deploy_argocd         = true
+argocd_domain         = "argocd.int.jigga.xyz"
+argocd_admin_password = "" # Password: admin123
+git_target_revision   = "main"                                                         # Git branch for ArgoCD to track
+
+# SOPS/AGE key for secret decryption (KSOPS plugin)
+sops_age_key = <<-EOT
+# created: 2026-01-02T10:43:39-05:00
+# public key: xxx
+AGE-SECRET-KEY-xxxxx
+EOT
+
+# -----------------------------------------------------------------------------
+# Cloudflare Tunnel Configuration (Public Access)
+# -----------------------------------------------------------------------------
+deploy_cloudflare_tunnel = true
+cloudflare_tunnel_name   = "my-tunnel"
+cloudflare_tunnel_credentials = {
+  account_tag   = "YOUR_CLOUDFLARE_ACCOUNT_TAG"
+  tunnel_secret = "YOUR_TUNNEL_SECRET"
+  tunnel_id     = "YOUR_TUNNEL_ID"
+}
+
+# Services to expose publicly via Cloudflare Tunnel
+cloudflare_tunnel_ingress_rules = [
+  { hostname = "example.com", service = "http://homepage.web:80" },
+  { hostname = "passwords.example.com", service = "http://vaultwarden.vaultwarden:80" }
+]
+
+# -----------------------------------------------------------------------------
+# Tailscale Configuration (OAuth - credentials don't expire)
+# -----------------------------------------------------------------------------
+deploy_tailscale              = true # Enable after creating OAuth client
+tailscale_tailnet             = "YOUR_EMAIL"
+tailscale_hostname            = "k3s-router"
+tailscale_oauth_client_id     = "YOUR_CLIENT_ID"
+tailscale_oauth_client_secret = "YOUR_CLIENT_SECRET"
+tailscale_advertised_routes = [
+  "10.42.0.0/16",  # K3s Pod network
+  "10.43.0.0/16",  # K3s Service network
+  "192.168.7.0/24" # Home LAN (includes DNS 192.168.7.1, MetalLB 230-235, VMs)
+]
+tailscale_tags = ["tag:k8s"]
+
+# -----------------------------------------------------------------------------
+# SDN Configuration (VXLAN Overlay Network)
+# -----------------------------------------------------------------------------
+enable_sdn = true
+sdn_zone_id    = "k3szone"
+sdn_vnet_id    = "k3svnet"
+sdn_vnet_alias = "K3s Cluster Overlay Network"
+proxmox_node_ips = ["192.168.1.100", "192.168.1.101", "192.168.1.102"]
+
+sdn_mtu            = 1450           # 50 bytes less than physical MTU (1500 - 50)
+sdn_subnet_cidr    = "10.0.0.0/24"  # Must match private_ip ranges in vm_definitions
+sdn_subnet_gateway = "10.0.0.1"

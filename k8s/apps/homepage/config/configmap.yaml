@@ -1,0 +1,163 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: homepage-config
+  namespace: web
+data:
+  bookmarks.yaml: |
+    - Developer:
+        - GitHub:
+            - abbr: GH
+              href: https://github.com/eosho/jigga.xyz
+        - ArgoCD:
+            - abbr: CD
+              href: https://argocd.int.jigga.xyz
+        - OpenGist:
+            - abbr: OG
+              href: https://gist.jigga.xyz
+
+  services.yaml: |
+    - Infrastructure:
+        - Proxmox Alpha:
+            icon: proxmox
+            href: https://192.168.7.233:8006
+            description: Proxmox Node 1
+        - Proxmox Beta:
+            icon: proxmox
+            href: https://192.168.7.234:8006
+            description: Proxmox Node 2
+        - Proxmox Gamma:
+            icon: proxmox
+            href: https://192.168.7.235:8006
+            description: Proxmox Node 3
+        - ArgoCD:
+            icon: argo-cd
+            href: https://argocd.int.jigga.xyz
+            description: GitOps Deployments
+        - TrueNAS:
+            icon: truenas
+            href: https://truenas.jigga.xyz/ui/
+            description: Network Storage
+        - Unifi:
+            icon: unifi
+            href: https://192.168.1.1
+            description: Network Controller
+
+    - Monitoring:
+        - Grafana:
+            icon: grafana
+            href: https://grafana.int.jigga.xyz
+            description: Dashboards & Metrics
+        - Prometheus:
+            icon: prometheus
+            href: https://prometheus.int.jigga.xyz
+            description: Metrics & Alerts
+        - Alertmanager:
+            icon: alertmanager
+            href: https://alertmanager.int.jigga.xyz
+            description: Alert Management
+        - MQTT Dashboard:
+            icon: emqx
+            href: https://mqtt.int.jigga.xyz
+            description: EMQX MQTT Broker
+        - Gatus:
+            icon: gatus
+            href: https://status.jigga.xyz
+            description: Status Page
+        - Headlamp:
+            icon: kubernetes-dashboard
+            href: https://headlamp.int.jigga.xyz
+            description: Kubernetes Dashboard
+
+    - Development:
+        - code-server:
+            icon: vscode
+            href: http://192.168.7.240:8080
+            description: VS Code in Browser
+        - PDM:
+            icon: proxmox
+            href: https://192.168.7.241:8443
+            description: Proxmox Datacenter Manager
+
+    - Security:
+        - Vaultwarden:
+            icon: vaultwarden
+            href: https://passwords.jigga.xyz
+            description: Password Manager
+
+    - Home Automation:
+        - Home Assistant:
+            icon: home-assistant
+            href: https://hass.jigga.xyz
+            description: Smart Home Control
+
+    - Applications:
+        - Open WebUI:
+            icon: https://raw.githubusercontent.com/open-webui/open-webui/main/static/favicon.png
+            href: https://chat.int.jigga.xyz
+            description: AI Chat Interface
+        - OpenGist:
+            icon: opengist
+            href: https://gist.jigga.xyz
+            description: Code Snippets
+
+    - Databases:
+        - pgAdmin:
+            icon: pgadmin
+            href: https://pgadmin.int.jigga.xyz
+            description: PostgreSQL Admin
+        - PostgreSQL:
+            icon: postgres
+            href: "#"
+            description: CloudNativePG Cluster
+
+  widgets.yaml: |
+    - kubernetes:
+        cluster:
+          show: true
+          cpu: true
+          memory: true
+          showLabel: true
+          label: "k3s cluster"
+        nodes:
+          show: true
+          cpu: true
+          memory: true
+          showLabel: true
+
+    - datetime:
+        text_size: xl
+        format:
+          dateStyle: long
+          timeStyle: short
+          hour12: false
+
+  settings.yaml: |
+    title: Jigga.xyz Dashboard
+    favicon: https://raw.githubusercontent.com/gethomepage/homepage/main/public/favicon.ico
+    theme: dark
+    color: slate
+    headerStyle: clean
+    layout:
+      Infrastructure:
+        style: row
+        columns: 3
+      Monitoring:
+        style: row
+        columns: 2
+      Automation:
+        style: row
+        columns: 2
+      Applications:
+        style: row
+        columns: 2
+      Databases:
+        style: row
+        columns: 2
+      Auth & Notifications:
+        style: row
+        columns: 2
+
+  docker.yaml: ""
+  kubernetes.yaml: |
+    mode: cluster

@@ -1,0 +1,40 @@
+# NFS PersistentVolume for PostgreSQL backups
+# Points to TrueNAS NFS share
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-backup-nfs
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: backup
+spec:
+  capacity:
+    storage: 50Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  nfs:
+    server: 192.168.1.246
+    path: /mnt/truenas-pool/pve/k8s/postgres
+  mountOptions:
+    - nfsvers=4.1
+    - hard
+    - noatime
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-backup
+  namespace: postgres
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: backup
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  volumeName: postgres-backup-nfs
+  resources:
+    requests:
+      storage: 50Gi

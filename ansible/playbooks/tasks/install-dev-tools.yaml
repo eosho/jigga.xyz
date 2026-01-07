@@ -1,0 +1,173 @@
+---
+# =============================================================================
+# Install Development Tools Task File
+# =============================================================================
+# Installs common development tools on the host system
+#
+# Required variables:
+#   dev_user: The user to install user-specific tools for
+#   dev_home: The home directory of that user
+#
+# Tools installed:
+#   - kubectl, helm (Kubernetes)
+#   - terraform (Infrastructure as Code)
+#   - Azure CLI
+#   - Docker CLI (already installed via install-docker.yaml)
+#   - Python 3 + uv
+#   - Common CLI tools (git, jq, tree, htop, vim, tmux)
+
+# =============================================================================
+# CLI Utilities
+# =============================================================================
+- name: Install CLI utilities
+  apt:
+    name:
+      - git
+      - jq
+      - tree
+      - htop
+      - vim
+      - tmux
+      - curl
+      - wget
+      - unzip
+      - build-essential
+      - ca-certificates
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: true
+
+# =============================================================================
+# kubectl
+# =============================================================================
+- name: Check if kubectl is installed
+  command: which kubectl
+  register: kubectl_check
+  changed_when: false
+  failed_when: false
+
+- name: Install kubectl
+  shell: |
+    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    chmod +x kubectl
+    mv kubectl /usr/local/bin/
+  when: kubectl_check.rc != 0
+
+# =============================================================================
+# Helm
+# =============================================================================
+- name: Check if helm is installed
+  command: which helm
+  register: helm_check
+  changed_when: false
+  failed_when: false
+
+- name: Install Helm
+  shell: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  when: helm_check.rc != 0
+
+# =============================================================================
+# Terraform (via HashiCorp apt repo)
+# =============================================================================
+- name: Check if terraform is installed
+  command: which terraform
+  register: terraform_check
+  changed_when: false
+  failed_when: false
+
+- name: Add HashiCorp GPG key
+  shell: |
+    curl -fsSL https://apt.releases.hashicorp.com/gpg | gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
+  args:
+    creates: /usr/share/keyrings/hashicorp-archive-keyring.gpg
+
+- name: Add HashiCorp apt repository
+  apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com {{ ansible_distribution_release }} main"
+    state: present
+    filename: hashicorp
+
+- name: Install Terraform
+  apt:
+    name: terraform
+    state: present
+    update_cache: true
+  when: terraform_check.rc != 0
+
+# =============================================================================
+# Azure CLI (via Microsoft apt repo)
+# =============================================================================
+- name: Check if Azure CLI is installed
+  command: which az
+  register: az_check
+  changed_when: false
+  failed_when: false
+
+- name: Add Microsoft GPG key
+  shell: |
+    curl -sL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-archive-keyring.gpg
+  args:
+    creates: /usr/share/keyrings/microsoft-archive-keyring.gpg
+
+- name: Add Azure CLI apt repository
+  apt_repository:
+    repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-archive-keyring.gpg] https://packages.microsoft.com/repos/azure-cli/ {{ ansible_distribution_release }} main"
+    state: present
+    filename: azure-cli
+
+- name: Install Azure CLI
+  apt:
+    name: azure-cli
+    state: present
+    update_cache: true
+  when: az_check.rc != 0
+
+# =============================================================================
+# Python 3 + pip + uv
+# =============================================================================
+- name: Install Python 3 and pip
+  apt:
+    name:
+      - python3
+      - python3-pip
+      - python3-venv
+    state: present
+
+- name: Check if uv is installed
+  become: true
+  become_user: "{{ dev_user }}"
+  command: "{{ dev_home }}/.local/bin/uv --version"
+  register: uv_check
+  changed_when: false
+  failed_when: false
+
+- name: Install uv for user
+  become: true
+  become_user: "{{ dev_user }}"
+  shell: curl -LsSf https://astral.sh/uv/install.sh | sh
+  environment:
+    HOME: "{{ dev_home }}"
+  when: uv_check.rc != 0
+
+# =============================================================================
+# PATH configuration for user
+# =============================================================================
+- name: Ensure .bashrc has local bin in PATH
+  become: true
+  become_user: "{{ dev_user }}"
+  blockinfile:
+    path: "{{ dev_home }}/.bashrc"
+    marker: "# {mark} ANSIBLE MANAGED - Dev tools PATH"
+    block: |
+      # Local binaries (uv, etc.)
+      export PATH="$HOME/.local/bin:$PATH"
+
+# =============================================================================
+# Verification
+# =============================================================================
+- name: Verify tool installations
+  debug:
+    msg: |
+      Development tools installation complete.
+      Tools will be available after logging in fresh or sourcing .bashrc

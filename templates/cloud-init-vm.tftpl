@@ -1,0 +1,29 @@
+#cloud-config
+# Minimal cloud-init for standalone VMs
+# Most configuration handled by Ansible after initial boot
+
+hostname: ${hostname}
+
+# User configuration
+users:
+  - name: ${vm_user}
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+      - ${ssh_key}
+
+package_update: true
+package_upgrade: false
+
+# Install packages via packages directive (runs before runcmd)
+packages:
+  - qemu-guest-agent
+  - nfs-common
+
+# Enable and start qemu-guest-agent after package installation
+runcmd:
+  - sudo systemctl enable qemu-guest-agent
+  - sudo systemctl start qemu-guest-agent
+
+final_message: "VM ${hostname} is ready after $UPTIME seconds"

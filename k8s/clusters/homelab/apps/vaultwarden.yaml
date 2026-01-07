@@ -1,0 +1,30 @@
+# Vaultwarden Application
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vaultwarden
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: vaultwarden
+    app.kubernetes.io/part-of: homelab
+    app.kubernetes.io/component: security
+    tier: app
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:eosho/jigga.xyz.git
+    targetRevision: main
+    path: k8s/apps/vaultwarden
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vaultwarden
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true

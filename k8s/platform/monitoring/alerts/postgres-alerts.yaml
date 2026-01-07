@@ -1,0 +1,183 @@
+# PostgreSQL (CloudNativePG) Alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: postgres-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: alerts
+    prometheus: k8s
+    role: alert-rules
+spec:
+  groups:
+    - name: postgres.rules
+      rules:
+        # Cluster Health
+        - alert: PostgresClusterNotHealthy
+          expr: cnpg_cluster_instances_status{status="healthy"} < cnpg_cluster_instances
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "PostgreSQL cluster {{ $labels.cluster }} is not healthy"
+            description: "PostgreSQL cluster {{ $labels.cluster }} has unhealthy instances. Expected: {{ $value }} healthy instances."
+
+        - alert: PostgresClusterNoLeader
+          expr: cnpg_cluster_instances_status{status="primary"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "PostgreSQL cluster {{ $labels.cluster }} has no primary"
+            description: "PostgreSQL cluster {{ $labels.cluster }} has no primary instance. Writes are not possible."
+
+        # Replication
+        - alert: PostgresReplicationLagHigh
+          expr: cnpg_pg_replication_lag > 30
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "PostgreSQL replication lag is high"
+            description: "PostgreSQL instance {{ $labels.pod }} has replication lag of {{ $value }} seconds."
+
+        - alert: PostgresReplicationLagCritical
+          expr: cnpg_pg_replication_lag > 120
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "PostgreSQL replication lag is critical"
+            description: "PostgreSQL instance {{ $labels.pod }} has replication lag of {{ $value }} seconds."
+
+        # Connections
+        - alert: PostgresConnectionsHigh
+          expr: (cnpg_pg_stat_database_numbackends / cnpg_pg_settings_max_connections) * 100 > 80
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "PostgreSQL connections above 80%"
+            description: "PostgreSQL instance {{ $labels.pod }} is using {{ $value }}% of max connections."
+
+        - alert: PostgresConnectionsCritical
+          expr: (cnpg_pg_stat_database_numbackends / cnpg_pg_settings_max_connections) * 100 > 95
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "PostgreSQL connections above 95%"
+            description: "PostgreSQL instance {{ $labels.pod }} is using {{ $value }}% of max connections."
+
+        # Disk Space
+        - alert: PostgresDiskSpaceLow
+          expr: (cnpg_pg_database_size_bytes / (10 * 1024 * 1024 * 1024)) * 100 > 80
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "PostgreSQL disk usage above 80%"
+            description: "PostgreSQL database {{ $labels.datname }} is using {{ $value }}% of allocated storage."
+
+        # Backup Alerts (CronJob-based pg_dumpall backups)
+        - alert: PostgresBackupJobFailed
+          expr: |
+            kube_job_status_failed{namespace="postgres", job_name=~"postgres-daily-backup.*"} > 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "PostgreSQL backup job failed"
+            description: "PostgreSQL backup job {{ $labels.job_name }} has failed. Check job logs for details."
+
+        - alert: PostgresBackupJobMissing
+          expr: |
+            (time() - kube_cronjob_status_last_successful_time{namespace="postgres", cronjob="postgres-daily-backup"}) > 90000
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "No successful PostgreSQL backup in 25 hours"
+            description: "PostgreSQL backup CronJob has not completed successfully in {{ $value | humanizeDuration }}."
+
+        - alert: PostgresBackupJobStuck
+          expr: |
+            kube_job_status_active{namespace="postgres", job_name=~"postgres-daily-backup.*"} > 0
+            and
+            (time() - kube_job_status_start_time{namespace="postgres", job_name=~"postgres-daily-backup.*"}) > 1800
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "PostgreSQL backup job running too long"
+            description: "PostgreSQL backup job {{ $labels.job_name }} has been running for over 30 minutes."
+
+        # Legacy CloudNativePG backup alerts (kept for future use)
+        - alert: PostgresBackupFailed
+          expr: cnpg_backup_info{status="failed"} > 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "PostgreSQL backup failed"
+            description: "PostgreSQL backup {{ $labels.backup }} for cluster {{ $labels.cluster }} has failed."
+
+        - alert: PostgresNoRecentBackup
+          expr: time() - cnpg_backup_info{status="completed"} > 86400 * 2
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "No recent PostgreSQL backup"
+            description: "PostgreSQL cluster {{ $labels.cluster }} has no successful backup in the last 48 hours."
+
+        # WAL Archiving
+        - alert: PostgresWALArchivingBehind
+          expr: cnpg_pg_stat_archiver_archived_count == 0
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "PostgreSQL WAL archiving not progressing"
+            description: "PostgreSQL instance {{ $labels.pod }} has not archived any WAL segments in 30 minutes."
+
+        # Transaction Wraparound
+        - alert: PostgresTransactionIdWraparound
+          expr: cnpg_pg_database_xact_commit + cnpg_pg_database_xact_rollback > 1500000000
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "PostgreSQL approaching transaction ID wraparound"
+            description: "PostgreSQL database {{ $labels.datname }} is approaching transaction ID wraparound. Run VACUUM."
+
+        # Long Running Queries
+        - alert: PostgresLongRunningQueries
+          expr: cnpg_pg_stat_activity_max_tx_duration_seconds > 300
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "PostgreSQL long running query detected"
+            description: "PostgreSQL instance {{ $labels.pod }} has a query running for {{ $value }} seconds."
+
+        # Deadlocks
+        - alert: PostgresDeadlocks
+          expr: rate(cnpg_pg_stat_database_deadlocks[5m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "PostgreSQL deadlocks detected"
+            description: "PostgreSQL database {{ $labels.datname }} is experiencing deadlocks."
+
+        # Instance Down
+        - alert: PostgresInstanceDown
+          expr: up{job=~".*cnpg.*"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "PostgreSQL instance is down"
+            description: "PostgreSQL instance {{ $labels.pod }} is not responding to metrics scraping."

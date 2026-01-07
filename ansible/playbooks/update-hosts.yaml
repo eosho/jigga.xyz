@@ -1,0 +1,29 @@
+---
+# Ansible Playbook: Update /etc/hosts on target machines
+# Usage: ansible-playbook playbooks/update-hosts.yaml
+
+- name: Append custom entries to hosts files on all nodes
+  hosts: all
+  become: true
+
+  vars:
+    cluster_hosts: "{{ lookup('file', 'hosts') }}"
+
+  tasks:
+    - name: Append to /etc/hosts
+      ansible.builtin.blockinfile:
+        path: /etc/hosts
+        block: "{{ cluster_hosts }}"
+        marker: "# {mark} ANSIBLE MANAGED - CLUSTER HOSTS"
+
+    - name: Check if cloud-init template exists
+      ansible.builtin.stat:
+        path: /etc/cloud/templates/hosts.debian.tmpl
+      register: cloud_init_template
+
+    - name: Append to /etc/cloud/templates/hosts.debian.tmpl
+      ansible.builtin.blockinfile:
+        path: /etc/cloud/templates/hosts.debian.tmpl
+        block: "{{ cluster_hosts }}"
+        marker: "# {mark} ANSIBLE MANAGED - CLUSTER HOSTS"
+      when: cloud_init_template.stat.exists

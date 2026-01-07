@@ -1,0 +1,16 @@
+# .sops.yaml
+# SOPS configuration for encrypting Kubernetes secrets
+#
+# To encrypt a secret:   sops -e -i k8s/apps/<app>/config/secret.yaml
+# To decrypt for viewing: sops -d k8s/apps/<app>/config/secret.yaml
+#
+# The AGE private key is stored in:
+#   - Local: ~/.config/sops/age/keys.txt
+#   - Cluster: argocd/sops-age secret (for KSOPS decryption)
+
+creation_rules:
+  # Encrypt secrets in k8s/apps/*/config/*secret*.yaml
+  - path_regex: k8s/.*secret.*\.yaml$
+    encrypted_regex: ^(data|stringData)$
+    age: age1n54ssq34zj4z6wdghnr7pq2e8xv7t9ag3j37cefsq4tvvq069sasnpmdq8
+

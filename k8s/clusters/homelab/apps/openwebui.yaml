@@ -1,0 +1,30 @@
+# Open WebUI - Self-hosted AI Chat Interface
+# https://docs.openwebui.com/
+# Version: 0.6.42 (Jan 2026)
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openwebui
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: openwebui
+    app.kubernetes.io/part-of: homelab
+    app.kubernetes.io/component: ai
+    tier: application
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:eosho/jigga.xyz.git
+    targetRevision: main
+    path: k8s/apps/openwebui
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openwebui
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

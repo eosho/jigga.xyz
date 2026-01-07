@@ -1,0 +1,67 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: traefik-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: alerts
+spec:
+  groups:
+    - name: traefik.rules
+      rules:
+        - alert: TraefikDown
+          expr: up{job=~"traefik.*"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Traefik ingress controller is down"
+            description: "Traefik has been unavailable for more than 2 minutes. All ingress traffic is affected!"
+
+        - alert: TraefikHighErrorRate
+          expr: |
+            sum(rate(traefik_entrypoint_requests_total{code=~"5.."}[5m]))
+            / sum(rate(traefik_entrypoint_requests_total[5m])) > 0.05
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Traefik high 5xx error rate"
+            description: "Traefik is returning {{ $value | humanizePercentage }} 5xx errors"
+
+        - alert: TraefikHighLatency
+          expr: histogram_quantile(0.95, sum(rate(traefik_entrypoint_request_duration_seconds_bucket[5m])) by (le, entrypoint)) > 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Traefik high latency on {{ $labels.entrypoint }}"
+            description: "Traefik p95 latency is {{ $value | printf \"%.2f\" }}s on entrypoint {{ $labels.entrypoint }}"
+
+        - alert: TraefikServiceDown
+          expr: traefik_service_server_up == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Traefik backend service {{ $labels.service }} is down"
+            description: "Backend service {{ $labels.service }} has no healthy servers"
+
+        - alert: TraefikTooManyOpenConnections
+          expr: sum(traefik_entrypoint_open_connections) > 1000
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Traefik has too many open connections"
+            description: "Traefik has {{ $value }} open connections across all entrypoints"
+
+        - alert: TraefikCertificateExpiring
+          expr: (traefik_tls_certs_not_after - time()) / 86400 < 14
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "Traefik TLS certificate expiring"
+            description: "TLS certificate for {{ $labels.cn }} will expire in {{ $value | printf \"%.0f\" }} days"

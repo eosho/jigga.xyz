@@ -1,0 +1,65 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: argocd-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: alerts
+spec:
+  groups:
+    - name: argocd.rules
+      rules:
+        - alert: ArgoCDAppOutOfSync
+          expr: argocd_app_info{sync_status!="Synced"} == 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "ArgoCD app {{ $labels.name }} out of sync"
+            description: "Application {{ $labels.name }} in project {{ $labels.project }} has been out of sync for more than 15 minutes"
+
+        - alert: ArgoCDAppHealthDegraded
+          expr: argocd_app_info{health_status=~"Degraded|Missing|Unknown"} == 1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "ArgoCD app {{ $labels.name }} health degraded"
+            description: "Application {{ $labels.name }} health status is {{ $labels.health_status }}"
+
+        - alert: ArgoCDAppSyncFailed
+          expr: argocd_app_info{sync_status="Unknown"} == 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "ArgoCD app {{ $labels.name }} sync status unknown"
+            description: "Application {{ $labels.name }} sync status is unknown - sync may have failed"
+
+        - alert: ArgoCDServerDown
+          expr: up{job=~"argocd.*server.*"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "ArgoCD server is down"
+            description: "ArgoCD server has been unavailable for more than 5 minutes"
+
+        - alert: ArgoCDRepoServerDown
+          expr: up{job=~"argocd.*repo.*"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "ArgoCD repo server is down"
+            description: "ArgoCD repository server has been unavailable for more than 5 minutes"
+
+        - alert: ArgoCDTooManyPendingApps
+          expr: count(argocd_app_info{sync_status="OutOfSync"}) > 5
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Too many ArgoCD apps out of sync"
+            description: "{{ $value }} applications are out of sync for more than 30 minutes"

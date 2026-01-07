@@ -1,0 +1,30 @@
+# MQTT (EMQX) Application
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: mqtt
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: emqx
+    app.kubernetes.io/part-of: homelab
+    app.kubernetes.io/component: messaging
+    tier: app
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:eosho/jigga.xyz.git
+    targetRevision: main
+    path: k8s/apps/mqtt
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mqtt
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true

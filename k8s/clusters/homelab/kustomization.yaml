@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Cluster: homelab (K3s on Proxmox)
+# This kustomization references all ArgoCD Application CRDs for this cluster
+
+resources:
+  - apps/homepage.yaml
+  - apps/mqtt.yaml
+  - apps/vault.yaml
+  - apps/vaultwarden.yaml
+  - apps/reloader.yaml
+  - apps/headlamp.yaml
+  - apps/gatus.yaml
+  - apps/cloudnative-pg.yaml
+  - apps/postgres.yaml
+  - apps/pgadmin.yaml

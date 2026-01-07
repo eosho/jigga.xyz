@@ -1,0 +1,76 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+
+  "extends": [
+    "config:base",
+    ":disableRateLimiting",
+    ":semanticCommits",
+    "docker:enableMajor",
+    "helpers:pinGitHubActionDigests"
+  ],
+
+  "labels": ["dependencies", "renovate"],
+
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+
+  "schedule": ["after 10pm and before 6am on saturday"],
+
+  "terraform": {
+    "fileMatch": [".*\\.tf$"]
+  },
+
+  "kubernetes": {
+    "fileMatch": ["^k8s/.+\\.ya?ml$"]
+  },
+
+  "helm-values": {
+    "fileMatch": ["^modules/.*\\.tf$"]
+  },
+
+  "regexManagers": [
+    {
+      "description": "Container images in Kubernetes manifests",
+      "fileMatch": ["^k8s/.+\\.ya?ml$"],
+      "matchStrings": ["image:\\s*['\"]?(?<depName>[^:@\\s'\"]+):(?<currentValue>[^@\\s'\"]+)"],
+      "datasourceTemplate": "docker"
+    }
+  ],
+
+  "packageRules": [
+    {
+      "description": "Terraform providers",
+      "matchManagers": ["terraform"],
+      "groupName": "terraform providers",
+      "automerge": false
+    },
+    {
+      "description": "Kubernetes manifests",
+      "matchManagers": ["kubernetes"],
+      "groupName": "kubernetes manifests"
+    },
+    {
+      "description": "Container images - automerge patches",
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Pin bitnami images to digest",
+      "matchPackagePatterns": ["^bitnami/"],
+      "pinDigests": true
+    },
+    {
+      "description": "Group monitoring stack",
+      "matchPackagePatterns": ["prometheus", "grafana", "alertmanager"],
+      "groupName": "monitoring stack"
+    },
+    {
+      "description": "Exclude kube-prometheus-stack major (breaking changes)",
+      "matchPackageNames": ["kube-prometheus-stack"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    }
+  ]
+}

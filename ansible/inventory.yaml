@@ -1,0 +1,38 @@
+---
+all:
+  vars:
+    ansible_user: groot
+    ansible_ssh_private_key_file: ~/.ssh/id_rsa
+    ansible_python_interpreter: /usr/bin/python3
+
+  children:
+    k3s_cluster:
+      children:
+        k3s_control:
+          hosts:
+            ichigo:
+              ansible_host: 192.168.7.223
+        k3s_workers:
+          hosts:
+            naruto:
+              ansible_host: 192.168.7.224
+            tanjiro:
+              ansible_host: 192.168.7.225
+
+    proxmox:
+      vars:
+        ansible_user: root
+      hosts:
+        pve-alpha:
+          ansible_host: 192.168.7.233
+        pve-beta:
+          ansible_host: 192.168.7.234
+        pve-gamma:
+          ansible_host: 192.168.7.235
+
+    extra:
+      hosts:
+        code-server:
+          ansible_host: 192.168.7.240
+        pdm:
+          ansible_host: 192.168.7.241

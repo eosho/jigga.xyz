@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openwebui-config
+  namespace: openwebui
+  labels:
+    app.kubernetes.io/name: openwebui
+data:
+  # General Settings
+  ENV: "prod"
+  WEBUI_URL: "https://chat.int.jigga.xyz"
+  WEBUI_NAME: "Open WebUI"
+
+  # User Settings - First user to sign up becomes admin
+  DEFAULT_USER_ROLE: "pending"  # New users need admin approval
+
+  # Ollama Settings (disable if not using Ollama)
+  ENABLE_OLLAMA_API: "false"
+  # OLLAMA_BASE_URL: "http://ollama.ollama.svc.cluster.local:11434"
+
+  # OpenAI Settings - Enable to use OpenAI-compatible APIs
+  ENABLE_OPENAI_API: "true"
+  # OPENAI_API_BASE_URL will be set via secret
+
+  # WebSocket support is required
+  ENABLE_WEBSOCKET_SUPPORT: "true"

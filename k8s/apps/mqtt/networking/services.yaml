@@ -1,0 +1,76 @@
+# Headless service for cluster discovery
+apiVersion: v1
+kind: Service
+metadata:
+  name: emqx-headless
+  namespace: mqtt
+  labels:
+    app.kubernetes.io/name: emqx
+    app.kubernetes.io/component: discovery
+spec:
+  clusterIP: None
+  selector:
+    app: emqx
+  ports:
+    - name: mqtt
+      port: 1883
+    - name: mqttssl
+      port: 8883
+    - name: ws
+      port: 8083
+    - name: wss
+      port: 8084
+    - name: dashboard
+      port: 18083
+    - name: ekka
+      port: 4370
+    - name: genrpc
+      port: 5369
+---
+# Main service for client connections
+apiVersion: v1
+kind: Service
+metadata:
+  name: emqx
+  namespace: mqtt
+  labels:
+    app.kubernetes.io/name: emqx
+    app.kubernetes.io/component: broker
+spec:
+  selector:
+    app: emqx
+  ports:
+    - name: mqtt
+      port: 1883
+      targetPort: 1883
+    - name: mqttssl
+      port: 8883
+      targetPort: 8883
+    - name: ws
+      port: 8083
+      targetPort: 8083
+    - name: dashboard
+      port: 18083
+      targetPort: 18083
+  type: ClusterIP
+---
+# LoadBalancer for external MQTT access
+apiVersion: v1
+kind: Service
+metadata:
+  name: emqx-lb
+  namespace: mqtt
+  labels:
+    app.kubernetes.io/name: emqx
+    app.kubernetes.io/component: external
+spec:
+  selector:
+    app: emqx
+  ports:
+    - name: mqtt
+      port: 1883
+      targetPort: 1883
+    - name: mqttssl
+      port: 8883
+      targetPort: 8883
+  type: LoadBalancer

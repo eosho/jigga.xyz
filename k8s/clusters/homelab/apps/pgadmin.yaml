@@ -1,0 +1,29 @@
+# pgAdmin - PostgreSQL Web UI
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pgadmin
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: pgadmin
+    app.kubernetes.io/part-of: homelab
+    app.kubernetes.io/component: database-ui
+    tier: apps
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:eosho/jigga.xyz.git
+    targetRevision: main
+    path: k8s/apps/pgadmin
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: pgadmin
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

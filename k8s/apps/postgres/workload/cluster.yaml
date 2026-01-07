@@ -1,0 +1,105 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/main/config/crd/bases/postgresql.cnpg.io_clusters.yaml
+# CloudNativePG PostgreSQL Cluster
+# 3-node HA cluster with automatic failover
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres-cluster
+  namespace: postgres
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+spec:
+  description: "Shared PostgreSQL cluster for homelab applications"
+
+  # PostgreSQL 18 - latest stable
+  imageName: ghcr.io/cloudnative-pg/postgresql:18
+
+  # 3 instances for true HA with quorum-based failover
+  instances: 3
+
+  # Automatic failover without manual intervention
+  primaryUpdateStrategy: unsupervised
+
+  # Storage configuration using Ceph
+  storage:
+    storageClass: ceph-rbd
+    size: 10Gi
+
+  # Resource allocation (conservative for homelab)
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # PostgreSQL configuration tuned for homelab workloads
+  postgresql:
+    shared_preload_libraries:
+      - pg_stat_statements
+    parameters:
+      # Connection settings
+      max_connections: "100"
+
+      # Memory settings (tuned for 512Mi limit)
+      shared_buffers: "128MB"
+      effective_cache_size: "256MB"
+      maintenance_work_mem: "64MB"
+      work_mem: "4MB"
+
+      # WAL settings
+      wal_buffers: "4MB"
+      min_wal_size: "512MB"
+      max_wal_size: "2GB"
+      checkpoint_completion_target: "0.9"
+
+      # Query planner settings
+      default_statistics_target: "100"
+      random_page_cost: "1.1"
+      effective_io_concurrency: "200"
+
+      # Logging
+      log_statement: "ddl"
+      log_min_duration_statement: "1000"
+
+  # Bootstrap with initial databases for apps
+  bootstrap:
+    initdb:
+      database: app
+      owner: app
+      postInitSQL:
+        - CREATE DATABASE gatus OWNER app;
+        - CREATE DATABASE vaultwarden OWNER app;
+        - GRANT ALL PRIVILEGES ON DATABASE gatus TO app;
+        - GRANT ALL PRIVILEGES ON DATABASE vaultwarden TO app;
+
+  # Superuser secret reference
+  superuserSecret:
+    name: postgres-superuser
+
+  # Backup configuration using Ceph volume snapshots
+  # For NFS backup, use external pg_dump CronJob (see scheduled-backup.yaml)
+  backup:
+    volumeSnapshot:
+      className: ceph-rbd
+      snapshotOwnerReference: cluster
+    retentionPolicy: "7d"
+    target: prefer-standby
+
+  # Monitoring with Prometheus
+  monitoring:
+    enablePodMonitor: true
+
+  # Anti-affinity for HA - spread across nodes
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+
+  # Node maintenance settings
+  nodeMaintenanceWindow:
+    inProgress: false
+
+  # Certificates (auto-generated)
+  certificates: {}

@@ -1,0 +1,113 @@
+---
+# Ansible Playbook: Upgrade Proxmox VE nodes
+# Usage: ansible-playbook -i inventory.yaml playbooks/proxmox-upgrade.yaml
+#
+# Options:
+#   --check              Dry run (show what would change)
+#   -e "reboot=true"     Reboot nodes after upgrade if required
+#   -e "serial=1"        Rolling upgrade (one node at a time)
+#   -l pve-alpha         Limit to specific node(s)
+#
+# ⚠️  WARNING: This performs a full dist-upgrade. Use proxmox-check-updates.yaml first!
+
+- name: Upgrade Proxmox VE nodes
+  hosts: proxmox
+  become: true
+  serial: "{{ serial | default(omit) }}"
+
+  vars:
+    reboot: false
+
+  tasks:
+    - name: Display upgrade warning
+      ansible.builtin.debug:
+        msg: "⚠️  UPGRADING: {{ inventory_hostname }} ({{ ansible_host }})"
+
+    - name: Get Proxmox version before upgrade
+      ansible.builtin.command: pveversion
+      register: pve_version_before
+      changed_when: false
+
+    - name: Display current version
+      ansible.builtin.debug:
+        msg: "Before: {{ pve_version_before.stdout }}"
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+
+    - name: Perform dist-upgrade
+      ansible.builtin.apt:
+        upgrade: dist
+        autoremove: true
+        autoclean: true
+      register: apt_upgrade
+
+    - name: Get Proxmox version after upgrade
+      ansible.builtin.command: pveversion
+      register: pve_version_after
+      changed_when: false
+
+    - name: Display version change
+      ansible.builtin.debug:
+        msg: "After: {{ pve_version_after.stdout }}"
+      when: pve_version_before.stdout != pve_version_after.stdout
+
+    - name: Check if reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
+    - name: Display reboot warning
+      ansible.builtin.debug:
+        msg: "⚠️  REBOOT REQUIRED - run with -e 'reboot=true' to reboot"
+      when:
+        - reboot_required.stat.exists
+        - not reboot | bool
+
+    - name: Reboot node
+      ansible.builtin.reboot:
+        msg: "Rebooting Proxmox node after upgrade"
+        pre_reboot_delay: 10
+        post_reboot_delay: 30
+        reboot_timeout: 600
+      when:
+        - reboot | bool
+        - reboot_required.stat.exists
+
+    - name: Wait for Proxmox web UI to be ready
+      ansible.builtin.wait_for:
+        port: 8006
+        delay: 10
+        timeout: 300
+      when:
+        - reboot | bool
+        - reboot_required.stat.exists
+
+- name: Upgrade Summary
+  hosts: proxmox
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Get final Proxmox version
+      ansible.builtin.command: pveversion
+      register: final_version
+      changed_when: false
+
+    - name: Check reboot status
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: final_reboot_status
+
+    - name: Display summary
+      vars:
+        summary:
+          - "═══════════════════════════════════════════════════════"
+          - "{{ inventory_hostname }} - Upgrade Complete"
+          - "═══════════════════════════════════════════════════════"
+          - "Version: {{ final_version.stdout }}"
+          - "Reboot pending: {{ '⚠️  YES' if final_reboot_status.stat.exists else '✅ No' }}"
+          - "═══════════════════════════════════════════════════════"
+      ansible.builtin.debug:
+        msg: "{{ summary }}"

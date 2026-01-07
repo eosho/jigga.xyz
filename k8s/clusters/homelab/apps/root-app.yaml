@@ -1,0 +1,43 @@
+# Root Application - App of Apps Pattern
+# Watches k8s/clusters/homelab/apps/ and auto-creates Applications from YAML files
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root-apps
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: root-apps
+    app.kubernetes.io/part-of: homelab
+    app.kubernetes.io/component: gitops
+    tier: platform
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:eosho/jigga.xyz.git
+    targetRevision: main
+    path: k8s/clusters/homelab/apps
+    directory:
+      recurse: false
+      exclude: '{root-app.yaml,README.md,kustomization.yaml}'  # Don't include itself or docs
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      # IMPORTANT: Set prune to false during initial cutover to prevent accidental deletions
+      # Enable pruning only after verifying the new paths work correctly
+      prune: false
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - Validate=true
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
