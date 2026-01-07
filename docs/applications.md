@@ -9,7 +9,7 @@ Quick reference for all deployed applications and their access endpoints.
 | Application | URL | Description |
 |-------------|-----|-------------|
 | **Homepage** | https://home.int.jigga.xyz | Dashboard with links to all services |
-| **Gatus** | https://status.int.jigga.xyz | Status page & uptime monitoring |
+| **Gatus** | https://uptime.int.jigga.xyz | Status page & uptime monitoring |
 | **ArgoCD** | https://argocd.int.jigga.xyz | GitOps deployment platform |
 | **Grafana** | https://grafana.int.jigga.xyz | Monitoring dashboards |
 | **Prometheus** | https://prometheus.int.jigga.xyz | Metrics database & queries |

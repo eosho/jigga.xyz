@@ -62,7 +62,7 @@ data:
             description: EMQX MQTT Broker
         - Gatus:
             icon: gatus
-            href: https://status.int.jigga.xyz
+            href: https://uptime.int.jigga.xyz
             description: Status Page
         - Headlamp:
             icon: kubernetes-dashboard

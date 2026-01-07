@@ -11,10 +11,10 @@ spec:
   ingressClassName: traefik
   tls:
     - hosts:
-        - status.int.jigga.xyz
+        - uptime.int.jigga.xyz
       secretName: gatus-tls
   rules:
-    - host: status.int.jigga.xyz
+    - host: uptime.int.jigga.xyz
       http:
         paths:
           - path: /
