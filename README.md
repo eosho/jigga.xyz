@@ -1,12 +1,13 @@
-<p align="center">
-  <img src="assets/jigga-xyz.png" alt="jigga.xyz" width="400">
-</p>
-
-<h1 align="center">jigga.xyz</h1>
-
-<p align="center">
-  <strong>K3s homelab on Proxmox • GitOps • Zero-trust networking</strong>
-</p>
+<table>
+  <tr>
+    <td><img src="assets/jigga-xyz.png" alt="jigga.xyz" width="150"></td>
+    <td>
+      <h2>jigga.xyz</h2>
+      <p><strong>K3s homelab on Proxmox</strong></p>
+      <p><strong>GitOps • Zero-trust networking</strong></p>
+    </td>
+  </tr>
+</table>
 
 ---
 
