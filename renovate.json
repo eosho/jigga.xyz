@@ -13,10 +13,6 @@
   ],
   "prConcurrentLimit": 5,
   "prHourlyLimit": 2,
-  "schedule": [
-    "after 10pm on saturday",
-    "before 6am on saturday"
-  ],
   "terraform": {
     "managerFilePatterns": [
       "/.*\\.tf$/"
