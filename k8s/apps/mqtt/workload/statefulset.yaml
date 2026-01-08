@@ -47,7 +47,7 @@ spec:
               mountPath: /opt/emqx/data
       containers:
         - name: emqx
-          image: emqx/emqx:5.10
+          image: emqx/emqx:6.0
           ports:
             - containerPort: 1883
               name: mqtt
