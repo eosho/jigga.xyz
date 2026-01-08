@@ -80,6 +80,10 @@ data:
             description: Proxmox Datacenter Manager
 
     - Security:
+        - Keycloak:
+            icon: keycloak
+            href: https://auth.int.jigga.xyz
+            description: Identity & SSO
         - Vaultwarden:
             icon: vaultwarden
             href: https://passwords.jigga.xyz

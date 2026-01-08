@@ -1,0 +1,52 @@
+# Traefik ForwardAuth Middleware
+# Use this to protect apps with Keycloak SSO
+# Add annotation to ingress: traefik.ingress.kubernetes.io/router.middlewares: keycloak-forward-auth@kubernetescrd
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: forward-auth
+  namespace: keycloak
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/component: middleware
+spec:
+  forwardAuth:
+    address: http://oauth2-proxy.keycloak.svc.cluster.local/oauth2/auth
+    trustForwardHeader: true
+    authResponseHeaders:
+      - X-Auth-Request-User
+      - X-Auth-Request-Email
+      - X-Auth-Request-Access-Token
+      - Authorization
+---
+# Ingress for OAuth2 Proxy callback
+# Required for SSO redirect flow
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: oauth2-proxy
+  namespace: keycloak
+  labels:
+    app.kubernetes.io/name: oauth2-proxy
+    app.kubernetes.io/component: ingress
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-dns-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - oauth.int.jigga.xyz
+      secretName: oauth2-proxy-tls
+  rules:
+    - host: oauth.int.jigga.xyz
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: oauth2-proxy
+                port:
+                  name: http

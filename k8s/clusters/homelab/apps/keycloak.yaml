@@ -1,0 +1,30 @@
+# Keycloak - Identity & Access Management (SSO)
+# https://www.keycloak.org/
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: keycloak
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/part-of: homelab
+    app.kubernetes.io/component: security
+    tier: platform
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: git@github.com:eosho/jigga.xyz.git
+    targetRevision: main
+    path: k8s/apps/keycloak
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: keycloak
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true

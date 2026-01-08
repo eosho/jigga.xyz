@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: keycloak
+
+resources:
+  - namespace.yaml
+  - workload/deployment.yaml
+  - workload/oauth2-proxy.yaml
+  - networking/service.yaml
+  - networking/ingress.yaml
+  - networking/middleware.yaml
+
+generators:
+  - secret-generator.yaml
