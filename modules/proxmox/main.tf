@@ -66,9 +66,9 @@ resource "proxmox_virtual_environment_vm" "k8s_node" {
   # OS Boot Configuration
   clone {
     vm_id        = coalesce(each.value.template_id, var.vm_os_template)
-    node_name    = var.template_node # Node where template is located
+    node_name    = each.value.target_node
     full         = true
-    datastore_id = "ceph-pool" # Clone to shared storage for multi-node access
+    datastore_id = "local-lvm"
   }
 
   agent {

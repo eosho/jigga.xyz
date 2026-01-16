@@ -12,7 +12,7 @@ variable "vms" {
     sockets       = optional(number, 1)
     memory        = number           # In MiB
     disk_size     = number           # In GB
-    storage       = optional(string) # Storage for VM disk (default: ceph-pool)
+    storage       = optional(string) # Storage for VM disk (default: local-lvm)
     ip_address    = string           # CIDR format (e.g., 192.168.7.240/24)
     gateway       = string           # Gateway IP
     dns_servers   = optional(list(string), ["1.1.1.1", "8.8.8.8"])
@@ -39,7 +39,7 @@ variable "template_node" {
 variable "default_storage" {
   description = "Default storage for VM disks"
   type        = string
-  default     = "ceph-pool"
+  default     = "local-lvm"
 }
 
 variable "vm_user" {

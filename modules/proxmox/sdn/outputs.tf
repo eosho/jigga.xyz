@@ -17,7 +17,7 @@ output "vnet_bridge" {
 
 output "subnet_cidr" {
   description = "The CIDR of the SDN subnet"
-  value       = proxmox_virtual_environment_sdn_subnet.k3s_subnet.cidr
+  value       = var.subnet_cidr
 }
 
 output "subnet_gateway" {

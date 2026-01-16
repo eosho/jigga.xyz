@@ -27,23 +27,12 @@ resource "proxmox_virtual_environment_sdn_vnet" "k3s_vnet" {
   depends_on = [proxmox_virtual_environment_sdn_applier.finalizer]
 }
 
-# Subnet - Defines the IP range for the overlay network
-resource "proxmox_virtual_environment_sdn_subnet" "k3s_subnet" {
-  cidr    = var.subnet_cidr
-  vnet    = proxmox_virtual_environment_sdn_vnet.k3s_vnet.id
-  gateway = var.subnet_gateway
-  snat    = var.enable_snat
-
-  depends_on = [proxmox_virtual_environment_sdn_applier.finalizer]
-}
-
 # SDN Applier - Applies all pending SDN changes to Proxmox nodes
 # This is REQUIRED - without it, SDN changes remain in "pending" state
 resource "proxmox_virtual_environment_sdn_applier" "apply" {
   depends_on = [
     proxmox_virtual_environment_sdn_zone_vxlan.k3s_zone,
-    proxmox_virtual_environment_sdn_vnet.k3s_vnet,
-    proxmox_virtual_environment_sdn_subnet.k3s_subnet
+    proxmox_virtual_environment_sdn_vnet.k3s_vnet
   ]
 }
 

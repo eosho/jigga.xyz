@@ -4,6 +4,18 @@ variable "grafana_domain" {
   default     = "grafana.int.jigga.xyz"
 }
 
+variable "prometheus_domain" {
+  description = "Domain name for Prometheus"
+  type        = string
+  default     = "prometheus.int.jigga.xyz"
+}
+
+variable "alertmanager_domain" {
+  description = "Domain name for Alertmanager"
+  type        = string
+  default     = "alertmanager.int.jigga.xyz"
+}
+
 variable "argocd_domain" {
   description = "Domain name for ArgoCD"
   type        = string
