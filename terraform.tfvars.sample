@@ -100,6 +100,8 @@ metallb_addresses  = ["192.168.1.230-192.168.1.235"]  # 6 IPs for LoadBalancer s
 # -----------------------------------------------------------------------------
 grafana_admin_password = "change-me-to-secure-password"  # Change this!
 grafana_domain         = "grafana.int.example.com"
+prometheus_domain      = "prometheus.int.example.com"
+alertmanager_domain    = "alertmanager.int.example.com"
 alertmanager_discord_webhook_url = "change_me"
 
 # -----------------------------------------------------------------------------

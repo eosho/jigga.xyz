@@ -185,6 +185,18 @@ variable "grafana_domain" {
   default     = "grafana.int.jigga.xyz"
 }
 
+variable "prometheus_domain" {
+  description = "Domain name for Prometheus UI"
+  type        = string
+  default     = "prometheus.int.jigga.xyz"
+}
+
+variable "alertmanager_domain" {
+  description = "Domain name for Alertmanager UI"
+  type        = string
+  default     = "alertmanager.int.jigga.xyz"
+}
+
 variable "alertmanager_discord_webhook_url" {
   description = "Discord webhook URL for Alertmanager notifications"
   type        = string
@@ -491,7 +503,7 @@ variable "standalone_vms" {
     sockets       = optional(number, 1)
     memory        = number           # In MiB
     disk_size     = number           # In GB
-    storage       = optional(string) # Storage for VM disk (default: ceph-pool)
+    storage       = optional(string) # Storage for VM disk (default: local-lvm)
     ip_address    = string           # CIDR format (e.g., 192.168.7.240/24)
     gateway       = string           # Gateway IP
     dns_servers   = optional(list(string), ["1.1.1.1", "8.8.8.8"])

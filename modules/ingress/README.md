@@ -36,6 +36,8 @@ sequenceDiagram
 | Service | Domain | Backend | Port |
 |---------|--------|---------|------|
 | Grafana | `grafana.int.jigga.xyz` | `kube-prometheus-stack-grafana` | 80 |
+| Prometheus | `prometheus.int.jigga.xyz` | `kube-prometheus-stack-prometheus` | 9090 |
+| Alertmanager | `alertmanager.int.jigga.xyz` | `kube-prometheus-stack-alertmanager` | 9093 |
 | ArgoCD | `argocd.int.jigga.xyz` | `argocd-server` | 80 |
 
 ## Configuration
@@ -46,6 +48,8 @@ sequenceDiagram
 |----------|-------------|------|---------|
 | `kubeconfig_path` | Path to kubeconfig file | `string` | - |
 | `grafana_domain` | Domain for Grafana | `string` | `grafana.int.jigga.xyz` |
+| `prometheus_domain` | Domain for Prometheus | `string` | `prometheus.int.jigga.xyz` |
+| `alertmanager_domain` | Domain for Alertmanager | `string` | `alertmanager.int.jigga.xyz` |
 | `argocd_domain` | Domain for ArgoCD | `string` | `argocd.int.jigga.xyz` |
 | `deploy_argocd` | Create ArgoCD ingress | `bool` | `false` |
 | `enable_tls` | Enable TLS via cert-manager | `bool` | `true` |
@@ -56,6 +60,8 @@ sequenceDiagram
 ```hcl
 # Ingress domains (internal services use .int subdomain)
 grafana_domain = "grafana.int.jigga.xyz"
+prometheus_domain = "prometheus.int.jigga.xyz"
+alertmanager_domain = "alertmanager.int.jigga.xyz"
 argocd_domain  = "argocd.int.jigga.xyz"
 
 # TLS Configuration

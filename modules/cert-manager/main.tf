@@ -23,8 +23,11 @@ resource "null_resource" "cert_manager_ready" {
   depends_on = [helm_release.cert_manager]
 
   provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = "export KUBECONFIG=${var.kubeconfig_path} && echo 'Waiting for cert-manager webhook to be ready...' && kubectl --insecure-skip-tls-verify -n cert-manager wait --for=condition=Available deployment/cert-manager-webhook --timeout=180s"
+    interpreter = ["/bin/bash", "-lc"]
+    environment = {
+      KUBECONFIG = abspath(var.kubeconfig_path)
+    }
+    command = "echo 'Waiting for cert-manager webhook to be ready...' && kubectl --insecure-skip-tls-verify -n cert-manager wait --for=condition=Available deployment/cert-manager-webhook --timeout=180s"
   }
 }
 
@@ -47,13 +50,11 @@ resource "null_resource" "apply_cloudflare_secret" {
   }
 
   provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = <<-EOT
-      export KUBECONFIG=${var.kubeconfig_path}
-      kubectl --insecure-skip-tls-verify -n cert-manager delete secret cloudflare-api-token --ignore-not-found
-      kubectl --insecure-skip-tls-verify -n cert-manager create secret generic cloudflare-api-token \
-        --from-literal=api-token='${var.cloudflare_api_token}'
-    EOT
+    interpreter = ["/bin/bash", "-lc"]
+    environment = {
+      KUBECONFIG = abspath(var.kubeconfig_path)
+    }
+    command = "kubectl --insecure-skip-tls-verify -n cert-manager create secret generic cloudflare-api-token --from-literal=api-token='${var.cloudflare_api_token}' --dry-run=client -o yaml | kubectl --insecure-skip-tls-verify apply --validate=false -f -"
   }
 }
 
@@ -93,8 +94,11 @@ resource "null_resource" "apply_cluster_issuer" {
   }
 
   provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = "export KUBECONFIG=${var.kubeconfig_path} && echo 'Applying HTTP-01 ClusterIssuer...' && sleep 5 && kubectl --insecure-skip-tls-verify apply -f ${path.module}/cluster-issuer.yaml"
+    interpreter = ["/bin/bash", "-lc"]
+    environment = {
+      KUBECONFIG = abspath(var.kubeconfig_path)
+    }
+    command = "echo 'Applying HTTP-01 ClusterIssuer...' && sleep 5 && kubectl --insecure-skip-tls-verify apply --validate=false -f ${path.module}/cluster-issuer.yaml"
   }
 }
 
@@ -141,7 +145,10 @@ resource "null_resource" "apply_dns_cluster_issuer" {
   }
 
   provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = "export KUBECONFIG=${var.kubeconfig_path} && echo 'Applying DNS-01 ClusterIssuer...' && kubectl --insecure-skip-tls-verify apply -f ${path.module}/cluster-issuer-dns01.yaml"
+    interpreter = ["/bin/bash", "-lc"]
+    environment = {
+      KUBECONFIG = abspath(var.kubeconfig_path)
+    }
+    command = "echo 'Applying DNS-01 ClusterIssuer...' && kubectl --insecure-skip-tls-verify apply --validate=false -f ${path.module}/cluster-issuer-dns01.yaml"
   }
 }

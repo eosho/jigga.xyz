@@ -153,6 +153,9 @@ module "proxmox" {
   k3s_token       = var.k3s_token
   k3s_version     = var.k3s_version
 
+  # Use the internal domain suffix for /etc/hosts FQDN entries
+  dns_zone = var.internal_domain_suffix
+
   # Include standalone VMs in Ansible inventory (use variable directly, IPs are known upfront)
   extra_hosts = { for name, vm in var.standalone_vms : name => split("/", vm.ip_address)[0] }
 }
@@ -259,12 +262,14 @@ module "ingress" {
   }
 
   # Configuration
-  kubeconfig_path = local.kubeconfig_path
-  grafana_domain  = var.grafana_domain
-  argocd_domain   = var.argocd_domain
-  deploy_argocd   = var.deploy_argocd
-  enable_tls      = var.enable_tls
-  cluster_issuer  = "letsencrypt-dns-${var.letsencrypt_environment}"
+  kubeconfig_path     = local.kubeconfig_path
+  grafana_domain      = var.grafana_domain
+  prometheus_domain   = var.prometheus_domain
+  alertmanager_domain = var.alertmanager_domain
+  argocd_domain       = var.argocd_domain
+  deploy_argocd       = var.deploy_argocd
+  enable_tls          = var.enable_tls
+  cluster_issuer      = "letsencrypt-dns-${var.letsencrypt_environment}"
 }
 
 # Cert-Manager Module for Let's Encrypt integration - Only created if deploy_kubernetes is true
@@ -302,6 +307,7 @@ module "argocd" {
   providers = {
     kubernetes = kubernetes.kubernetes_provider
     helm       = helm.helm_provider
+    kubectl    = kubectl.kubectl_provider
   }
 
   # Configuration

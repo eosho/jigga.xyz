@@ -35,9 +35,6 @@ log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# -----------------------------------------------------------------------------
-# Version mapping function
-# -----------------------------------------------------------------------------
 get_ubuntu_codename() {
     local version="$1"
     case "$version" in
@@ -67,9 +64,7 @@ get_version_short() {
     echo "${version//.}" # Remove dots: 22.04 -> 2204
 }
 
-# -----------------------------------------------------------------------------
 # Parse arguments
-# -----------------------------------------------------------------------------
 UBUNTU_VERSION_INPUT="${1:-24.04}"
 UBUNTU_CODENAME=$(get_ubuntu_codename "$UBUNTU_VERSION_INPUT")
 DEFAULT_TEMPLATE_ID=$(get_default_template_id "$UBUNTU_VERSION_INPUT")
@@ -81,19 +76,8 @@ TEMPLATE_NAME="ubuntu-${VERSION_SHORT}-template"
 IMAGE_URL="https://cloud-images.ubuntu.com/${UBUNTU_CODENAME}/current/${UBUNTU_CODENAME}-server-cloudimg-amd64.img"
 WORK_DIR="/tmp/pve-template"
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
 
-log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
-log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
-log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
-
-# -----------------------------------------------------------------------------
 # Pre-flight checks
-# -----------------------------------------------------------------------------
 log_info "Starting Ubuntu cloud-init template creation..."
 log_info "Ubuntu Version: ${UBUNTU_VERSION_INPUT} (${UBUNTU_CODENAME})"
 log_info "Template ID: ${TEMPLATE_ID}"
@@ -135,9 +119,8 @@ if [[ "$STORAGE_TYPE" == "dir" ]] || [[ "$STORAGE_TYPE" == "lvm" ]] || [[ "$STOR
     fi
 fi
 
-# -----------------------------------------------------------------------------
+
 # Download Ubuntu cloud image
-# -----------------------------------------------------------------------------
 log_info "Creating work directory..."
 mkdir -p "${WORK_DIR}"
 cd "${WORK_DIR}"
@@ -160,9 +143,8 @@ if [[ ! -f "${IMAGE_FILE}" ]]; then
     wget -q --show-progress "${IMAGE_URL}" -O "${IMAGE_FILE}"
 fi
 
-# -----------------------------------------------------------------------------
+
 # Pre-configure the image using virt-customize
-# -----------------------------------------------------------------------------
 log_info "Checking for libguestfs-tools..."
 if ! command -v virt-customize &>/dev/null; then
     log_warn "virt-customize not found. Installing libguestfs-tools..."
@@ -184,9 +166,8 @@ virt-customize -a "${IMAGE_FILE}" \
 
 log_info "Image customization complete - packages will install on first boot"
 
-# -----------------------------------------------------------------------------
+
 # Create the VM
-# -----------------------------------------------------------------------------
 log_info "Creating VM ${TEMPLATE_ID}..."
 
 qm create ${TEMPLATE_ID} \
@@ -205,21 +186,16 @@ qm create ${TEMPLATE_ID} \
     --vga serial0 \
     --tags template,ubuntu,cloud-init,ubuntu-${VERSION_SHORT}
 
-# -----------------------------------------------------------------------------
+
 # Import the cloud image as the boot disk
-# -----------------------------------------------------------------------------
 log_info "Importing cloud image to storage '${STORAGE}'..."
 qm set ${TEMPLATE_ID} --scsi0 ${STORAGE}:0,import-from="${WORK_DIR}/${IMAGE_FILE}",discard=on,ssd=1,iothread=1
 
-# -----------------------------------------------------------------------------
 # Add cloud-init drive
-# -----------------------------------------------------------------------------
 log_info "Adding cloud-init drive..."
 qm set ${TEMPLATE_ID} --ide2 ${STORAGE}:cloudinit
 
-# -----------------------------------------------------------------------------
 # Configure boot and other settings
-# -----------------------------------------------------------------------------
 log_info "Configuring boot settings..."
 
 # Set boot order (boot from SCSI disk)
@@ -235,22 +211,16 @@ qm set ${TEMPLATE_ID} --citype nocloud
 # Enable hotplug for disks and network
 qm set ${TEMPLATE_ID} --hotplug disk,network,usb
 
-# -----------------------------------------------------------------------------
 # Convert to template
-# -----------------------------------------------------------------------------
 log_info "Converting VM to template..."
 qm template ${TEMPLATE_ID}
 
-# -----------------------------------------------------------------------------
 # Cleanup
-# -----------------------------------------------------------------------------
 log_info "Cleaning up..."
 # Keep the image for future use, only delete if explicitly requested
 rm -f "${WORK_DIR}/${IMAGE_FILE}"
 
-# -----------------------------------------------------------------------------
 # Summary
-# -----------------------------------------------------------------------------
 echo ""
 echo "============================================================================="
 echo -e "${GREEN}Template created successfully!${NC}"

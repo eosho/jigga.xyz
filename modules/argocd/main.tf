@@ -10,6 +10,9 @@ terraform {
     helm = {
       source = "hashicorp/helm"
     }
+    kubectl = {
+      source = "alekc/kubectl"
+    }
   }
 }
 
@@ -243,16 +246,14 @@ resource "kubernetes_secret_v1" "repo_ssh_credentials" {
 # =============================================================================
 # This deploys a single "root" Application that watches kubernetes/argocd-apps/
 # and automatically creates all other ArgoCD Applications from YAML files.
-resource "kubernetes_manifest" "root_application" {
+resource "kubectl_manifest" "root_application" {
   count = var.deploy_argocd && var.deploy_root_app ? 1 : 0
 
   depends_on = [helm_release.argocd]
 
-  field_manager {
-    force_conflicts = true
-  }
+  force_conflicts = true
 
-  manifest = {
+  yaml_body = yamlencode({
     apiVersion = "argoproj.io/v1alpha1"
     kind       = "Application"
     metadata = {
@@ -298,5 +299,5 @@ resource "kubernetes_manifest" "root_application" {
         }
       }
     }
-  }
+  })
 }
