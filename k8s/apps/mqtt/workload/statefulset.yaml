@@ -1,106 +1,100 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: emqx
+  name: mosquitto
   namespace: mqtt
   labels:
-    app: emqx
-    app.kubernetes.io/name: emqx
+    app: mosquitto
+    app.kubernetes.io/name: mosquitto
     app.kubernetes.io/component: broker
 spec:
-  serviceName: emqx-headless
-  replicas: 1  # EMQX Open Source only supports single node (clustering requires Enterprise license)
+  serviceName: mosquitto-headless
+  replicas: 1
   podManagementPolicy: Parallel
   selector:
     matchLabels:
-      app: emqx
+      app: mosquitto
   template:
     metadata:
       labels:
-        app: emqx
+        app: mosquitto
     spec:
       securityContext:
-        fsGroup: 1000
-        runAsUser: 1000
-        runAsGroup: 1000
+        fsGroup: 1883
+        runAsUser: 1883
+        runAsGroup: 1883
       initContainers:
-        - name: init-bootstrap
-          image: busybox:1.37
+        - name: init-config
+          image: eclipse-mosquitto:2.0
+          securityContext:
+            runAsUser: 0
           command:
             - /bin/sh
             - -c
             - |
-              # Create auth bootstrap file with real passwords
-              cat /bootstrap-template/auth-bootstrap.csv | \
-                sed "s/HASS_PASSWORD_PLACEHOLDER/${HASS_PASSWORD}/g" | \
-                sed "s/GOVEE_PASSWORD_PLACEHOLDER/${GOVEE_PASSWORD}/g" \
-                > /opt/emqx/data/auth-bootstrap.csv
-              echo "Bootstrap file created:"
-              cat /opt/emqx/data/auth-bootstrap.csv
+              set -euo pipefail
+              install -d -m 0750 /mosquitto/config
+              cp /config-src/mosquitto.conf /mosquitto/config/mosquitto.conf
+
+              # Create a password file from SOPS-managed secrets
+              mosquitto_passwd -b -c /mosquitto/config/passwords hass "${HASS_PASSWORD}"
+              mosquitto_passwd -b /mosquitto/config/passwords govee "${GOVEE_PASSWORD}"
+              chmod 0600 /mosquitto/config/passwords
+              chown -R 1883:1883 /mosquitto/config
           envFrom:
             - secretRef:
-                name: emqx-users
+                name: mosquitto-users
           volumeMounts:
-            - name: bootstrap-template
-              mountPath: /bootstrap-template
-            - name: emqx-data
-              mountPath: /opt/emqx/data
+            - name: config-src
+              mountPath: /config-src
+              readOnly: true
+            - name: mosquitto-config
+              mountPath: /mosquitto/config
       containers:
-        - name: emqx
-          image: emqx/emqx:5.10
+        - name: mosquitto
+          image: eclipse-mosquitto:2.0
+          args:
+            - mosquitto
+            - -c
+            - /mosquitto/config/mosquitto.conf
           ports:
             - containerPort: 1883
               name: mqtt
-            - containerPort: 8883
-              name: mqttssl
-            - containerPort: 8083
-              name: ws
-            - containerPort: 8084
-              name: wss
-            - containerPort: 18083
-              name: dashboard
-            - containerPort: 4370
-              name: ekka
-            - containerPort: 5369
-              name: genrpc
-          envFrom:
-            - configMapRef:
-                name: emqx-config
-            - secretRef:
-                name: emqx-secret
           resources:
             requests:
-              cpu: 100m
-              memory: 256Mi
+              cpu: 25m
+              memory: 64Mi
             limits:
-              cpu: 500m
-              memory: 512Mi
+              cpu: 250m
+              memory: 256Mi
           volumeMounts:
-            - name: emqx-data
-              mountPath: /opt/emqx/data
+            - name: mosquitto-data
+              mountPath: /mosquitto/data
+            - name: mosquitto-config
+              mountPath: /mosquitto/config
           livenessProbe:
-            httpGet:
-              path: /api/v5/status
-              port: 18083
-            initialDelaySeconds: 60
+            tcpSocket:
+              port: 1883
+            initialDelaySeconds: 15
             periodSeconds: 30
             timeoutSeconds: 10
           readinessProbe:
-            httpGet:
-              path: /api/v5/status
-              port: 18083
-            initialDelaySeconds: 45
+            tcpSocket:
+              port: 1883
+            initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 5
       volumes:
-        - name: bootstrap-template
+        - name: config-src
           configMap:
-            name: emqx-bootstrap
+            name: mosquitto-config
+        - name: mosquitto-config
+          emptyDir: {}
   volumeClaimTemplates:
     - apiVersion: v1
       kind: PersistentVolumeClaim
       metadata:
-        name: emqx-data
+        name: mosquitto-data
       spec:
         accessModes: ["ReadWriteOnce"]
         storageClassName: ceph-rbd

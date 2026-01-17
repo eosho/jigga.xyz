@@ -1,34 +1,16 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: emqx-config
+  name: mosquitto-config
   namespace: mqtt
 data:
-  EMQX_NAME: emqx
-  # Single-node mode (no clustering for open source)
-  EMQX_CLUSTER__DISCOVERY_STRATEGY: manual
-  EMQX_DASHBOARD__DEFAULT_USERNAME: admin
-  EMQX_LISTENER__TCP__EXTERNAL: "1883"
-  EMQX_LISTENER__SSL__EXTERNAL: "8883"
-  EMQX_LISTENER__WS__EXTERNAL: "8083"
-  EMQX_LISTENER__WSS__EXTERNAL: "8084"
-  # Enable built-in authentication with bootstrap file
-  EMQX_AUTHENTICATION__1__MECHANISM: password_based
-  EMQX_AUTHENTICATION__1__BACKEND: built_in_database
-  EMQX_AUTHENTICATION__1__PASSWORD_HASH_ALGORITHM__NAME: plain
-  EMQX_AUTHENTICATION__1__BOOTSTRAP_FILE: /opt/emqx/data/auth-bootstrap.csv
-  EMQX_AUTHENTICATION__1__BOOTSTRAP_TYPE: plain
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: emqx-bootstrap
-  namespace: mqtt
-data:
-  # Bootstrap users for EMQX built-in auth
-  # Format: user_id,password,is_superuser (header row required)
-  # Passwords are injected via init container from secrets
-  auth-bootstrap.csv: |
-    user_id,password,is_superuser
-    hass,HASS_PASSWORD_PLACEHOLDER,false
-    govee,GOVEE_PASSWORD_PLACEHOLDER,false
+  mosquitto.conf: |
+    persistence true
+    persistence_location /mosquitto/data/
+    log_dest stdout
+
+    allow_anonymous false
+    password_file /mosquitto/config/passwords
+
+    listener 1883
+    protocol mqtt

@@ -56,10 +56,6 @@ data:
             icon: alertmanager
             href: https://alertmanager.int.jigga.xyz
             description: Alert Management
-        - MQTT Dashboard:
-            icon: emqx
-            href: https://mqtt.int.jigga.xyz
-            description: EMQX MQTT Broker
         - Gatus:
             icon: gatus
             href: https://uptime.int.jigga.xyz

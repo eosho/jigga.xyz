@@ -86,16 +86,6 @@ data:
         alerts:
           - type: discord
 
-      - name: EMQX Dashboard
-        group: Web Apps
-        url: "http://emqx.mqtt:18083"
-        interval: 60s
-        conditions:
-          - "[STATUS] == 200"
-          - "[RESPONSE_TIME] < 2000"
-        alerts:
-          - type: discord
-
       - name: Vaultwarden
         group: Web Apps
         url: "http://vaultwarden.vaultwarden:80"
@@ -187,16 +177,6 @@ data:
         conditions:
           - "[STATUS] == 200"
           - "[RESPONSE_TIME] < 3000"
-        alerts:
-          - type: discord
-
-      # MQTT Broker
-      - name: MQTT API
-        group: MQTT
-        url: "http://emqx.mqtt:18083/api/v5/status"
-        interval: 30s
-        conditions:
-          - "[STATUS] == 200"
         alerts:
           - type: discord
 
