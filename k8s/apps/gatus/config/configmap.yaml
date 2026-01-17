@@ -96,6 +96,16 @@ data:
         alerts:
           - type: discord
 
+      # MQTT
+      - name: Mosquitto
+        group: MQTT
+        url: "tcp://mosquitto.mqtt:1883"
+        interval: 30s
+        conditions:
+          - "[CONNECTED] == true"
+        alerts:
+          - type: discord
+
       # Infrastructure
       - name: Traefik
         group: Infrastructure
