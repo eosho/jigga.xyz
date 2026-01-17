@@ -352,7 +352,7 @@ http://argocd-server.argocd:80
 |-----|------------|--------------|-----------------|
 | Homepage | `jigga.xyz` | - | `homepage.web:80` |
 | Vaultwarden | `passwords.jigga.xyz` | - | `vaultwarden.vaultwarden:80` |
-| MQTT | - | `mqtt.int.jigga.xyz` | `emqx.mqtt:18083` |
+| MQTT | - | - | `mosquitto.mqtt:1883` |
 | ArgoCD | - | `argocd.int.jigga.xyz` | `argocd-server.argocd:443` |
 | Grafana | - | `grafana.int.jigga.xyz` | `kube-prometheus-stack-grafana.monitoring:80` |
 | Alertmanager | - | `alertmanager.int.jigga.xyz` | `kube-prometheus-stack-alertmanager.monitoring:9093` |

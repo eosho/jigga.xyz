@@ -1,11 +1,11 @@
-# MQTT (EMQX) Application
+# MQTT (Eclipse Mosquitto) Application
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: mqtt
   namespace: argocd
   labels:
-    app.kubernetes.io/name: emqx
+    app.kubernetes.io/name: mosquitto
     app.kubernetes.io/part-of: homelab
     app.kubernetes.io/component: messaging
     tier: app

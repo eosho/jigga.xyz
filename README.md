@@ -38,7 +38,7 @@ terraform apply
 | Grafana | https://grafana.int.jigga.xyz | Monitoring dashboards |
 | Prometheus | https://prometheus.int.jigga.xyz | Metrics collection |
 | Alertmanager | https://alertmanager.int.jigga.xyz | Alert management |
-| MQTT | https://mqtt.int.jigga.xyz | EMQX Dashboard |
+| MQTT | (LoadBalancer / MetalLB) | Eclipse Mosquitto broker |
 
 > **Adding new apps?** See [docs/adding-new-applications.md](docs/adding-new-applications.md)
 
@@ -49,7 +49,7 @@ terraform apply
 │   ├── apps/             # Application definitions (Kustomize)
 │   │   ├── _template/    # Template for new apps
 │   │   ├── homepage/     # Homepage dashboard
-│   │   ├── mqtt/         # EMQX MQTT broker
+│   │   ├── mqtt/         # Eclipse Mosquitto MQTT broker
 │   │   └── vaultwarden/  # Password manager
 │   ├── clusters/         # Cluster-specific configuration
 │   │   └── homelab/      # Homelab cluster
@@ -153,9 +153,6 @@ kubectl port-forward svc/kube-prometheus-stack-grafana 3000:80 -n monitoring
 
 # Prometheus
 kubectl port-forward svc/kube-prometheus-stack-prometheus 9090:9090 -n monitoring
-
-# MQTT Dashboard
-kubectl port-forward svc/emqx 18083:18083 -n mqtt
 
 # Traefik Dashboard
 kubectl port-forward svc/traefik 9000:9000 -n kube-system

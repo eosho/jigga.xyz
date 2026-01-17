@@ -8,7 +8,6 @@ resources:
   - config/configmap.yaml
   - workload/statefulset.yaml
   - networking/services.yaml
-  - networking/ingress.yaml
 
 generators:
   - config/secret-generator.yaml

@@ -1,76 +1,53 @@
-# Headless service for cluster discovery
+# Headless service (stable DNS for StatefulSet)
 apiVersion: v1
 kind: Service
 metadata:
-  name: emqx-headless
+  name: mosquitto-headless
   namespace: mqtt
   labels:
-    app.kubernetes.io/name: emqx
+    app.kubernetes.io/name: mosquitto
     app.kubernetes.io/component: discovery
 spec:
   clusterIP: None
   selector:
-    app: emqx
-  ports:
-    - name: mqtt
-      port: 1883
-    - name: mqttssl
-      port: 8883
-    - name: ws
-      port: 8083
-    - name: wss
-      port: 8084
-    - name: dashboard
-      port: 18083
-    - name: ekka
-      port: 4370
-    - name: genrpc
-      port: 5369
----
-# Main service for client connections
-apiVersion: v1
-kind: Service
-metadata:
-  name: emqx
-  namespace: mqtt
-  labels:
-    app.kubernetes.io/name: emqx
-    app.kubernetes.io/component: broker
-spec:
-  selector:
-    app: emqx
+    app: mosquitto
   ports:
     - name: mqtt
       port: 1883
       targetPort: 1883
-    - name: mqttssl
-      port: 8883
-      targetPort: 8883
-    - name: ws
-      port: 8083
-      targetPort: 8083
-    - name: dashboard
-      port: 18083
-      targetPort: 18083
+---
+# Main service for in-cluster client connections
+apiVersion: v1
+kind: Service
+metadata:
+  name: mosquitto
+  namespace: mqtt
+  labels:
+    app.kubernetes.io/name: mosquitto
+    app.kubernetes.io/component: broker
+spec:
   type: ClusterIP
+  selector:
+    app: mosquitto
+  ports:
+    - name: mqtt
+      port: 1883
+      targetPort: 1883
 ---
 # LoadBalancer for external MQTT access
 apiVersion: v1
 kind: Service
 metadata:
-  name: emqx-lb
+  name: mosquitto-lb
   namespace: mqtt
   labels:
-    app.kubernetes.io/name: emqx
+    app.kubernetes.io/name: mosquitto
     app.kubernetes.io/component: external
 spec:
+  type: LoadBalancer
   selector:
-    app: emqx
+    app: mosquitto
   ports:
     - name: mqtt
       port: 1883
       targetPort: 1883
-    - name: mqttssl
-      port: 8883
-      targetPort: 8883
-  type: LoadBalancer

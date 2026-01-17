@@ -15,7 +15,6 @@ Quick reference for all deployed applications and their access endpoints.
 | **Prometheus** | https://prometheus.int.jigga.xyz | Metrics database & queries |
 | **Alertmanager** | https://alertmanager.int.jigga.xyz | Alert management |
 | **Headlamp** | https://headlamp.int.jigga.xyz | Kubernetes dashboard (CNCF) |
-| **EMQX Dashboard** | https://mqtt.int.jigga.xyz | MQTT broker admin console |
 | **Vaultwarden** | https://passwords.int.jigga.xyz | Password manager (Bitwarden compatible) |
 | **pgAdmin** | https://pgadmin.int.jigga.xyz | PostgreSQL administration |
 
@@ -25,8 +24,7 @@ Quick reference for all deployed applications and their access endpoints.
 
 | Service | Endpoint | Protocol | Description |
 |---------|----------|----------|-------------|
-| **MQTT** | 192.168.7.231:1883 | TCP | MQTT broker (unencrypted) |
-| **MQTT TLS** | 192.168.7.231:8883 | TCP+TLS | MQTT broker (encrypted) |
+| **MQTT** | 192.168.7.231:1883 | TCP | MQTT broker (Mosquitto) |
 | **Traefik** | 192.168.7.230:443 | HTTPS | Ingress controller |
 | **PostgreSQL** | postgres-cluster-rw.postgres.svc:5432 | TCP | Database (cluster-internal) |
 
@@ -56,7 +54,7 @@ Quick reference for all deployed applications and their access endpoints.
 | IP | Service |
 |----|---------|
 | 192.168.7.230 | Traefik (Ingress) |
-| 192.168.7.231 | EMQX (MQTT) |
+| 192.168.7.231 | Mosquitto (MQTT) |
 | 192.168.7.232-235 | Available |
 
 ---
@@ -69,7 +67,6 @@ Quick reference for all deployed applications and their access endpoints.
 |-------------|----------|----------------|
 | ArgoCD | admin | `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" \| base64 -d` |
 | Grafana | admin | (check secret or use SSO) |
-| EMQX | admin | Managed via SOPS (see `k8s/apps/mqtt/config/secret.yaml`) |
 | Headlamp | - | Use ServiceAccount token: `kubectl create token headlamp -n headlamp --duration=87600h` |
 | Gatus | - | No authentication (internal only) |
 | pgAdmin | admin@jigga.xyz | `kubectl get secret pgadmin-secret -n pgadmin -o jsonpath="{.data.PGADMIN_DEFAULT_PASSWORD}" \| base64 -d` |
@@ -96,7 +93,7 @@ All `*.int.jigga.xyz` endpoints require one of:
 | `gatus` | Gatus status page |
 | `headlamp` | Headlamp dashboard |
 | `monitoring` | Prometheus, Grafana, Alertmanager, node-exporter |
-| `mqtt` | EMQX broker |
+| `mqtt` | Mosquitto broker |
 | `pgadmin` | pgAdmin PostgreSQL admin |
 | `postgres` | PostgreSQL HA cluster (CloudNativePG) |
 | `vaultwarden` | Vaultwarden password manager |
