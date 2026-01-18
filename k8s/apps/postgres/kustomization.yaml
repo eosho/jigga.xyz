@@ -5,7 +5,6 @@ namespace: postgres
 
 resources:
   - namespace.yaml
-  - config/backup-volume.yaml
   - workload/cluster.yaml
   - workload/scheduled-backup.yaml
 
