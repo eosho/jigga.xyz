@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dozzle-ingress
+  namespace: dozzle
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-dns-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - logs.int.jigga.xyz
+      secretName: dozzle-tls
+  rules:
+    - host: logs.int.jigga.xyz
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dozzle
+                port:
+                  number: 80

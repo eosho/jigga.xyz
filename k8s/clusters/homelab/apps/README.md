@@ -7,6 +7,7 @@
 # - root-app.yaml     - Root Application (App of Apps pattern)
 # - homepage.yaml     - Homepage dashboard
 # - mqtt.yaml         - Eclipse Mosquitto MQTT broker
+# - dozzle.yaml       - Dozzle (Kubernetes logs UI)
 # - vaultwarden.yaml  - Bitwarden-compatible password manager
 # - platform.yaml     - Platform configs (MetalLB, alerts, etc.)
 # - reloader.yaml     - Stakater Reloader (Helm)
