@@ -79,12 +79,24 @@ spec:
   superuserSecret:
     name: postgres-superuser
 
-  # Backup configuration using Ceph volume snapshots
-  # For NFS backup, use external pg_dump CronJob (see scheduled-backup.yaml)
+  # Backup configuration using CNPG native S3 backups (Barman object store)
+  # Target: MinIO on TrueNAS (S3-compatible) so backups survive cluster teardown.
+  # NOTE: Ensure the `postgres-minio` Secret exists in the `postgres` namespace.
   backup:
-    volumeSnapshot:
-      className: ceph-rbd
-      snapshotOwnerReference: cluster
+    barmanObjectStore:
+      endpointURL: http://192.168.1.246:9000
+      destinationPath: s3://postgres-backups/postgres-cluster
+      serverName: postgres-cluster
+      s3Credentials:
+        accessKeyId:
+          name: postgres-minio
+          key: accessKey
+        secretAccessKey:
+          name: postgres-minio
+          key: secretKey
+        region:
+          name: postgres-minio
+          key: region
     retentionPolicy: "7d"
     target: prefer-standby
 

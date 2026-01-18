@@ -39,12 +39,12 @@ flowchart TB
     apps -->|"DATABASE_URL"| rw
 
     subgraph backup["Backup (Daily 2AM UTC)"]
-        cronjob["CronJob<br/>pg_dumpall"]
-        nfs["NFS Storage<br/>192.168.1.246"]
+        scheduled["CNPG ScheduledBackup"]
+        minio["MinIO (S3)<br/>TrueNAS 192.168.1.246"]
     end
 
-    cronjob -->|"Dump"| primary
-    cronjob -->|"Store .sql.gz"| nfs
+    scheduled -->|"Barman/S3 backup"| primary
+    scheduled -->|"Store backup"| minio
 ```
 
 ### Data Flow
@@ -115,26 +115,35 @@ kubectl get secret postgres-superuser -n postgres -o jsonpath='{.data.password}'
 
 ### Schedule
 
-Daily at **2:00 AM UTC** via Kubernetes CronJob.
+Daily at **2:00 AM UTC** via CloudNativePG `ScheduledBackup`.
 
 ### Backup Method
 
-- **Tool**: `pg_dumpall` (logical backup)
-- **Format**: Gzipped SQL (`.sql.gz`)
-- **Storage**: NFS (`192.168.1.246:/mnt/truenas-pool/pve/k8s/postgres`)
-- **Retention**: Last 7 backups
+- **Method**: CNPG native `barmanObjectStore` (S3)
+- **Storage**: MinIO (S3-compatible) hosted on TrueNAS (survives cluster teardown)
+- **Retention**: 7 days (`spec.backup.retentionPolicy`)
 
 ### Manual Backup
 
 ```bash
-# Trigger immediate backup
-kubectl create job --from=cronjob/postgres-daily-backup postgres-backup-manual -n postgres
+# Trigger immediate backup (one-off)
+kubectl create -n postgres -f - <<'EOF'
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+    name: postgres-backup-manual
+spec:
+    immediate: true
+    schedule: "0 0 31 2 *"  # never (immediate only)
+    backupOwnerReference: none
+    cluster:
+        name: postgres-cluster
+    method: barmanObjectStore
+EOF
 
-# Check backup status
-kubectl get jobs -n postgres -l app.kubernetes.io/component=backup
-
-# View backup logs
-kubectl logs -n postgres -l job-name=postgres-backup-manual
+# Check backups
+kubectl get scheduledbackups -n postgres
+kubectl get backups -n postgres
 ```
 
 ### List Backups
@@ -146,14 +155,8 @@ kubectl logs -n postgres -l job-name=postgres-backup-manual
 ### Restore
 
 ```bash
-# Verify backup contents
-./scripts/postgres-restore.sh postgres-backup-YYYYMMDD-HHMMSS.sql.gz --verify
-
-# Restore all databases
-./scripts/postgres-restore.sh postgres-backup-YYYYMMDD-HHMMSS.sql.gz
-
-# Restore specific database
-./scripts/postgres-restore.sh postgres-backup-YYYYMMDD-HHMMSS.sql.gz --database gatus
+# Restores are handled via CNPG bootstrap/recovery when recreating a Cluster.
+# (This repo still includes ./scripts/postgres-restore.sh for the legacy pg_dump workflow.)
 ```
 
 ## Monitoring
@@ -230,14 +233,11 @@ kubectl describe cluster.postgresql.cnpg.io postgres-cluster -n postgres
 ### Backup Failed
 
 ```bash
-# Check CronJob status
-kubectl get cronjob postgres-daily-backup -n postgres
+# Check ScheduledBackup
+kubectl get scheduledbackup postgres-daily-backup -n postgres -o yaml
 
-# Check recent job logs
-kubectl logs -n postgres -l app.kubernetes.io/component=backup --tail=50
-
-# Verify NFS mount
-kubectl exec -it postgres-cluster-1 -n postgres -- ls -la /backup/
+# Check recent Backup objects
+kubectl get backups -n postgres --sort-by=.metadata.creationTimestamp | tail
 ```
 
 ### Connection Issues
@@ -253,10 +253,9 @@ kubectl run -it --rm pg-test --image=postgres:18 --restart=Never -- \
 ```
 k8s/apps/postgres/
 ├── config/
-│   └── backup-volume.yaml    # NFS PV/PVC for backups
 ├── workload/
 │   ├── cluster.yaml          # CloudNativePG Cluster resource
-│   └── scheduled-backup.yaml # Backup CronJob
+│   └── scheduled-backup.yaml # CNPG ScheduledBackup
 ├── kustomization.yaml
 ├── namespace.yaml
 ├── secret-generator.yaml     # KSOPS generator for secrets
