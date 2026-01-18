@@ -21,6 +21,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: dozzle-ui
+                name: logs-ui
                 port:
                   number: 80

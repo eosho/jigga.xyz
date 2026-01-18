@@ -98,7 +98,7 @@ data:
 
       - name: Dozzle
         group: Web Apps
-        url: "http://dozzle-ui.dozzle:80/health"
+        url: "http://logs-ui.dozzle:80/health"
         interval: 60s
         conditions:
           - "[STATUS] == 200"
