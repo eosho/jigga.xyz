@@ -96,10 +96,39 @@ data:
         alerts:
           - type: discord
 
+      - name: Dozzle
+        group: Web Apps
+        url: "http://dozzle.dozzle:80/health"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+          - "[RESPONSE_TIME] < 2000"
+        alerts:
+          - type: discord
+
+      - name: Dozzle (Ingress)
+        group: Web Apps
+        url: "https://logs.int.jigga.xyz/health"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+          - "[RESPONSE_TIME] < 3000"
+        alerts:
+          - type: discord
+
       # MQTT
       - name: Mosquitto
         group: MQTT
         url: "tcp://mosquitto.mqtt:1883"
+        interval: 30s
+        conditions:
+          - "[CONNECTED] == true"
+        alerts:
+          - type: discord
+
+      - name: Mosquitto (LAN)
+        group: MQTT
+        url: "tcp://192.168.7.231:1883"
         interval: 30s
         conditions:
           - "[CONNECTED] == true"

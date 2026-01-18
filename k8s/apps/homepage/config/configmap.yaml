@@ -64,6 +64,10 @@ data:
             icon: kubernetes-dashboard
             href: https://headlamp.int.jigga.xyz
             description: Kubernetes Dashboard
+        - Logs:
+          icon: docker
+          href: https://logs.int.jigga.xyz
+          description: Live Cluster Logs
 
     - Development:
         - code-server:
