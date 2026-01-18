@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: dozzle-ui
+  name: logs-ui
   namespace: dozzle
   labels:
     app.kubernetes.io/name: dozzle
