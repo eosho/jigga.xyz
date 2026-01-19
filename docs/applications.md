@@ -14,7 +14,6 @@ Quick reference for all deployed applications and their access endpoints.
 | **Grafana** | https://grafana.int.jigga.xyz | Monitoring dashboards |
 | **Prometheus** | https://prometheus.int.jigga.xyz | Metrics database & queries |
 | **Alertmanager** | https://alertmanager.int.jigga.xyz | Alert management |
-| **Headlamp** | https://headlamp.int.jigga.xyz | Kubernetes dashboard (CNCF) |
 | **Vaultwarden** | https://passwords.int.jigga.xyz | Password manager (Bitwarden compatible) |
 | **pgAdmin** | https://pgadmin.int.jigga.xyz | PostgreSQL administration |
 
@@ -67,7 +66,6 @@ Quick reference for all deployed applications and their access endpoints.
 |-------------|----------|----------------|
 | ArgoCD | admin | `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" \| base64 -d` |
 | Grafana | admin | (check secret or use SSO) |
-| Headlamp | - | Use ServiceAccount token: `kubectl create token headlamp -n headlamp --duration=87600h` |
 | Gatus | - | No authentication (internal only) |
 | pgAdmin | admin@jigga.xyz | `kubectl get secret pgadmin-secret -n pgadmin -o jsonpath="{.data.PGADMIN_DEFAULT_PASSWORD}" \| base64 -d` |
 | PostgreSQL | app | `kubectl get secret postgres-cluster-app -n postgres -o jsonpath="{.data.password}" \| base64 -d` |
@@ -91,7 +89,6 @@ All `*.int.jigga.xyz` endpoints require one of:
 | `argocd` | ArgoCD |
 | `cnpg-system` | CloudNativePG operator |
 | `gatus` | Gatus status page |
-| `headlamp` | Headlamp dashboard |
 | `monitoring` | Prometheus, Grafana, Alertmanager, node-exporter |
 | `mqtt` | Mosquitto broker |
 | `pgadmin` | pgAdmin PostgreSQL admin |
