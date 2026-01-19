@@ -1,0 +1,206 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authentik-server
+  namespace: authentik
+  labels:
+    app: authentik
+    component: server
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: authentik
+      component: server
+  template:
+    metadata:
+      labels:
+        app: authentik
+        component: server
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9300"
+    spec:
+      serviceAccountName: authentik
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+      - name: authentik-server
+        image: ghcr.io/goauthentik/authentik:2025.12.1
+        imagePullPolicy: IfNotPresent
+        command:
+          - /lifecycle/ak
+          - server
+        ports:
+        - name: http
+          containerPort: 9000
+          protocol: TCP
+        - name: metrics
+          containerPort: 9300
+          protocol: TCP
+        env:
+        - name: AUTHENTIK_REDIS__HOST
+          value: authentik-redis.authentik.svc.cluster.local
+        - name: AUTHENTIK_REDIS__PORT
+          value: "6379"
+        - name: AUTHENTIK_ERROR_REPORTING__ENABLED
+          value: "false"
+        - name: AUTHENTIK_BLUEPRINT_TOXICS_ENABLED
+          value: "true"
+        envFrom:
+        - secretRef:
+            name: authentik-env
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /-/health/live/
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /-/health/ready/
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /var/cache/authentik
+      - name: authentik-worker
+        image: ghcr.io/goauthentik/authentik:2025.12.1
+        imagePullPolicy: IfNotPresent
+        command:
+          - /lifecycle/ak
+          - worker
+        env:
+        - name: AUTHENTIK_REDIS__HOST
+          value: authentik-redis.authentik.svc.cluster.local
+        - name: AUTHENTIK_REDIS__PORT
+          value: "6379"
+        - name: AUTHENTIK_ERROR_REPORTING__ENABLED
+          value: "false"
+        envFrom:
+        - secretRef:
+            name: authentik-env
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /var/cache/authentik
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authentik-redis
+  namespace: authentik
+  labels:
+    app: authentik
+    component: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: authentik
+      component: redis
+  template:
+    metadata:
+      labels:
+        app: authentik
+        component: redis
+    spec:
+      securityContext:
+        fsGroup: 999
+        runAsNonRoot: true
+        runAsUser: 999
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        imagePullPolicy: IfNotPresent
+        command:
+          - redis-server
+          - "--appendonly"
+          - "yes"
+          - "--requirepass"
+          - ""
+        ports:
+        - name: redis
+          containerPort: 6379
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+      volumes:
+      - name: redis-data
+        emptyDir: {}

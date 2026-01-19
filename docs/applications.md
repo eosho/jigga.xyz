@@ -9,6 +9,7 @@ Quick reference for all deployed applications and their access endpoints.
 | Application | URL | Description |
 |-------------|-----|-------------|
 | **Homepage** | https://home.int.jigga.xyz | Dashboard with links to all services |
+| **Authentik** | https://auth.int.jigga.xyz | Central identity provider (SSO/OIDC) |
 | **Gatus** | https://uptime.int.jigga.xyz | Status page & uptime monitoring |
 | **ArgoCD** | https://argocd.int.jigga.xyz | GitOps deployment platform |
 | **Grafana** | https://grafana.int.jigga.xyz | Monitoring dashboards |
@@ -64,6 +65,7 @@ Quick reference for all deployed applications and their access endpoints.
 
 | Application | Username | Password/Token |
 |-------------|----------|----------------|
+| Authentik | akadmin | `kubectl get secret authentik-env -n authentik -o jsonpath="{.data.AUTHENTIK_BOOTSTRAP_PASSWORD}" \| base64 -d` |
 | ArgoCD | admin | `kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" \| base64 -d` |
 | Grafana | admin | (check secret or use SSO) |
 | Gatus | - | No authentication (internal only) |
@@ -87,6 +89,7 @@ All `*.int.jigga.xyz` endpoints require one of:
 | Namespace | Applications |
 |-----------|--------------|
 | `argocd` | ArgoCD |
+| `authentik` | Authentik (SSO/OIDC provider) |
 | `cnpg-system` | CloudNativePG operator |
 | `gatus` | Gatus status page |
 | `monitoring` | Prometheus, Grafana, Alertmanager, node-exporter |
