@@ -72,8 +72,10 @@ spec:
       postInitSQL:
         - CREATE DATABASE gatus OWNER app;
         - CREATE DATABASE vaultwarden OWNER app;
+        - CREATE DATABASE authentik OWNER app;
         - GRANT ALL PRIVILEGES ON DATABASE gatus TO app;
         - GRANT ALL PRIVILEGES ON DATABASE vaultwarden TO app;
+        - GRANT ALL PRIVILEGES ON DATABASE authentik TO app;
 
   # Superuser secret reference
   superuserSecret:
