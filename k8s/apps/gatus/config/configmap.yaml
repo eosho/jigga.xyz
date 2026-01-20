@@ -48,7 +48,7 @@ data:
 
       - name: Grafana
         group: Web Apps
-        url: "http://kube-prometheus-stack-grafana.monitoring:80"
+        url: "http://kube-prometheus-stack-grafana.monitoring:80/api/health"
         interval: 60s
         conditions:
           - "[STATUS] == 200"
