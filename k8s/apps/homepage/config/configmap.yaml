@@ -60,10 +60,6 @@ data:
             icon: gatus
             href: https://uptime.int.jigga.xyz
             description: Status Page
-        - Headlamp:
-            icon: kubernetes-dashboard
-            href: https://headlamp.int.jigga.xyz
-            description: Kubernetes Dashboard
         - Logs:
             icon: docker
             href: https://logs.int.jigga.xyz

@@ -10,7 +10,6 @@ resources:
   - apps/vault.yaml
   - apps/vaultwarden.yaml
   - apps/reloader.yaml
-  - apps/headlamp.yaml
   - apps/gatus.yaml
   - apps/cloudnative-pg.yaml
   - apps/postgres.yaml
