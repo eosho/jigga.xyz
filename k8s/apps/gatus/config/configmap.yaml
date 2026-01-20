@@ -76,16 +76,6 @@ data:
         alerts:
           - type: discord
 
-      - name: Headlamp
-        group: Web Apps
-        url: "http://headlamp.headlamp:80"
-        interval: 60s
-        conditions:
-          - "[STATUS] == 200"
-          - "[RESPONSE_TIME] < 2000"
-        alerts:
-          - type: discord
-
       - name: Vaultwarden
         group: Web Apps
         url: "http://vaultwarden.vaultwarden:80"
