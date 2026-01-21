@@ -204,7 +204,7 @@ spec:
           - name: target-database
           - name: pg-password
       container:
-        image: postgres:18
+        image: bitnami/kubectl:latest
         command:
           - /bin/bash
           - -c
@@ -213,7 +213,7 @@ spec:
             BACKUP_FILE="{{inputs.parameters.backup-file}}"
             TARGET_DB="{{inputs.parameters.target-database}}"
             PG_HOST="postgres-cluster-rw.postgres.svc.cluster.local"
-            export POSTGRES_PASSWORD="{{inputs.parameters.pg-password}}"
+            export PGPASSWORD="{{inputs.parameters.pg-password}}"
             
             echo "=== PostgreSQL Restore ==="
             echo "Backup file: $BACKUP_FILE"
@@ -221,16 +221,26 @@ spec:
             echo "Started at: $(date)"
             echo ""
             
+            # Find primary pod
+            PRIMARY_POD=$(kubectl get pods -n postgres -l cnpg.io/cluster=postgres-cluster,cnpg.io/instanceRole=primary -o jsonpath='{.items[0].metadata.name}')
+            if [ -z "$PRIMARY_POD" ]; then
+              echo "ERROR: Could not find primary postgres pod"
+              exit 1
+            fi
+            echo "Using primary pod: $PRIMARY_POD"
+            echo ""
+            
             # Function to restore a single database
             restore_database() {
               local db="$1"
               echo "--- Restoring database: $db ---"
               
-              # Drop and recreate database
+              # Drop and recreate database using postgres user (via kubectl exec)
               echo "Dropping existing database..."
-              PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$PG_HOST" -U app -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='$db' AND pid <> pg_backend_pid();" 2>/dev/null || true
-              PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$PG_HOST" -U app -d postgres -c "DROP DATABASE IF EXISTS \"$db\";"
-              PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$PG_HOST" -U app -d postgres -c "CREATE DATABASE \"$db\";"
+              kubectl exec -n postgres "$PRIMARY_POD" -- psql -U postgres -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='$db' AND pid <> pg_backend_pid();" 2>/dev/null || true
+              kubectl exec -n postgres "$PRIMARY_POD" -- psql -U postgres -d postgres -c "DROP DATABASE IF EXISTS \"$db\";"
+              kubectl exec -n postgres "$PRIMARY_POD" -- psql -U postgres -d postgres -c "CREATE DATABASE \"$db\";"
+              kubectl exec -n postgres "$PRIMARY_POD" -- psql -U postgres -d postgres -c "ALTER DATABASE \"$db\" OWNER TO app;"
               
               # Extract and restore database section from pg_dumpall
               echo "Restoring data..."
@@ -250,7 +260,13 @@ spec:
                   }
                 '
                 echo "SET session_replication_role = origin;"
-              } | PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$PG_HOST" -U app -d "$db" -v ON_ERROR_STOP=0
+              } | PGPASSWORD="$PGPASSWORD" psql -h "$PG_HOST" -U app -d "$db" -v ON_ERROR_STOP=0
+              
+              # Fix permissions
+              echo "Fixing permissions..."
+              kubectl exec -n postgres "$PRIMARY_POD" -- psql -U postgres -d "$db" -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO app;" 2>/dev/null || true
+              kubectl exec -n postgres "$PRIMARY_POD" -- psql -U postgres -d "$db" -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO app;" 2>/dev/null || true
+              kubectl exec -n postgres "$PRIMARY_POD" -- psql -U postgres -d "$db" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO app;" 2>/dev/null || true
               
               echo "✓ Database $db restored"
               echo ""
