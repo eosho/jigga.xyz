@@ -28,6 +28,21 @@ controller:
   workflowNamespaces:
     - argo-workflows
 
+  # Workflow Archive - persist history to PostgreSQL
+  persistence:
+    archive: true
+    postgresql:
+      host: postgres-rw.postgres.svc.cluster.local
+      port: 5432
+      database: argo_workflows
+      tableName: argo_workflows
+      userNameSecret:
+        name: argo-postgres-credentials
+        key: username
+      passwordSecret:
+        name: argo-postgres-credentials
+        key: password
+
   # Resource limits
   resources:
     requests:
