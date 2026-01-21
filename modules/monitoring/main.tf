@@ -210,7 +210,7 @@ resource "helm_release" "loki" {
   name       = "loki"
   repository = "https://grafana.github.io/helm-charts"
   chart      = "loki"
-  version    = "6.29.0"
+  version    = "6.51.0"
   namespace  = "monitoring"
 
   wait    = true
