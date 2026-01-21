@@ -42,3 +42,26 @@ spec:
           limits:
             cpu: 100m
             memory: 64Mi
+
+    - name: cluster-info
+      container:
+        image: alpine:3.23
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "=== Cluster Info ==="
+            echo "Node: $NODE_NAME"
+            echo "Date: $(date)"
+            echo "Hostname: $(hostname)"
+        env:
+          - name: NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
