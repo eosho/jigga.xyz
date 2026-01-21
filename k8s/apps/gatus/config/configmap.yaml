@@ -96,26 +96,6 @@ data:
         alerts:
           - type: discord
 
-      - name: Dozzle
-        group: Web Apps
-        url: "http://logs-ui.dozzle:80/health"
-        interval: 60s
-        conditions:
-          - "[STATUS] == 200"
-          - "[RESPONSE_TIME] < 2000"
-        alerts:
-          - type: discord
-
-      - name: Dozzle (Ingress)
-        group: Web Apps
-        url: "https://logs.int.jigga.xyz/health"
-        interval: 60s
-        conditions:
-          - "[STATUS] == 200"
-          - "[RESPONSE_TIME] < 3000"
-        alerts:
-          - type: discord
-
       # MQTT
       - name: Mosquitto
         group: MQTT
