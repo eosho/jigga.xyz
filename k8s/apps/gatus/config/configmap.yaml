@@ -46,6 +46,16 @@ data:
         alerts:
           - type: discord
 
+      - name: Argo Workflows
+        group: Web Apps
+        url: "http://argo-workflows-server.argo-workflows:2746"
+        interval: 60s
+        conditions:
+          - "[STATUS] == 200"
+          - "[RESPONSE_TIME] < 3000"
+        alerts:
+          - type: discord
+
       - name: Grafana
         group: Web Apps
         url: "http://kube-prometheus-stack-grafana.monitoring:80/api/health"
