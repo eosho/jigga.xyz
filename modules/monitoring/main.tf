@@ -277,6 +277,17 @@ lokiCanary:
 # Disable helm test
 test:
   enabled: false
+
+# Enable ServiceMonitor for Prometheus scraping
+monitoring:
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: kube-prometheus-stack
+  selfMonitoring:
+    enabled: false
+    grafanaAgent:
+      installOperator: false
 EOF
   ]
 }
@@ -382,6 +393,12 @@ alloy:
 
 controller:
   type: daemonset
+
+# Enable ServiceMonitor for Prometheus scraping
+serviceMonitor:
+  enabled: true
+  additionalLabels:
+    release: kube-prometheus-stack
 EOF
   ]
 }

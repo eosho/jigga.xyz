@@ -10,6 +10,7 @@ resources:
   - argo-workflows-alerts.yaml
   - vaultwarden-alerts.yaml
   - postgres-alerts.yaml
+  - target-down-alerts.yaml
 
 labels:
   - pairs:

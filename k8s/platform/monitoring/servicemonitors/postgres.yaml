@@ -1,0 +1,44 @@
+---
+# PodMonitor for CloudNativePG Operator
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: cnpg-operator
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: cloudnative-pg
+    app.kubernetes.io/component: operator
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - cnpg-system
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudnative-pg
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+---
+# PodMonitor for PostgreSQL Cluster (CNPG managed)
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: postgres-cluster
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - postgres
+  selector:
+    matchLabels:
+      cnpg.io/cluster: postgres-cluster
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics

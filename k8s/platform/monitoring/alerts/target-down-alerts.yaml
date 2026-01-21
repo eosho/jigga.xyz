@@ -1,0 +1,132 @@
+---
+# Alerts for monitoring targets going down
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: target-down-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: alerts
+    release: kube-prometheus-stack
+spec:
+  groups:
+    - name: target.down.rules
+      rules:
+        # Generic target down alert
+        - alert: TargetDown
+          expr: up == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Target {{ $labels.job }} is down"
+            description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 5 minutes."
+
+        # Argo Workflows
+        - alert: ArgoWorkflowsControllerDown
+          expr: up{job="argo-workflows-workflow-controller"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Argo Workflows Controller is down"
+            description: "Argo Workflows Controller has been unavailable for more than 5 minutes. Workflows will not be processed."
+
+        - alert: ArgoWorkflowsServerDown
+          expr: up{job="argo-workflows-server"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Argo Workflows Server is down"
+            description: "Argo Workflows UI/API server has been unavailable for more than 5 minutes."
+
+        # ArgoCD
+        - alert: ArgoCDDown
+          expr: up{job="monitoring/argocd"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "ArgoCD is down"
+            description: "ArgoCD components have been unavailable for more than 5 minutes. GitOps sync will not function."
+
+        # PostgreSQL
+        - alert: PostgreSQLDown
+          expr: up{job="monitoring/postgres-cluster"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "PostgreSQL cluster is down"
+            description: "PostgreSQL cluster has been unavailable for more than 2 minutes. Database-dependent services will fail."
+
+        # Ceph CSI
+        - alert: CephCSINodePluginDown
+          expr: up{job="ceph-csi-rbd-nodeplugin-http-metrics"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Ceph CSI node plugin is down"
+            description: "Ceph CSI node plugin on {{ $labels.instance }} has been down for more than 5 minutes. Volume operations may fail."
+
+        - alert: CephCSIProvisionerDown
+          expr: up{job="ceph-csi-rbd-provisioner-http-metrics"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Ceph CSI provisioner is down"
+            description: "Ceph CSI provisioner has been down for more than 5 minutes. New PVC creation will fail."
+
+        # cert-manager
+        - alert: CertManagerDown
+          expr: up{job="cert-manager"} == 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "cert-manager is down"
+            description: "cert-manager has been unavailable for more than 10 minutes. Certificate renewal will not work."
+
+        # Cloudflared
+        - alert: CloudflaredDown
+          expr: up{job="cloudflared-metrics"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Cloudflare tunnel is down"
+            description: "Cloudflared tunnel has been down for more than 5 minutes. External access to services will fail."
+
+        # Loki
+        - alert: LokiDown
+          expr: up{job=~".*loki.*"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Loki is down"
+            description: "Loki log aggregation has been down for more than 5 minutes. Log collection will fail."
+
+        # Alloy
+        - alert: AlloyDown
+          expr: up{job=~".*alloy.*"} == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Grafana Alloy is down"
+            description: "Alloy log collector on {{ $labels.instance }} has been down for more than 5 minutes. Logs will not be collected from this node."
+
+        # UniFi Poller (if deployed)
+        - alert: UnpollerDown
+          expr: up{job="unpoller"} == 0
+          for: 10m
+          labels:
+            severity: info
+          annotations:
+            summary: "UniFi Poller is down"
+            description: "UniFi Poller has been down for more than 10 minutes. Network metrics will not be collected."

@@ -1,0 +1,46 @@
+---
+# ServiceMonitor for Ceph CSI RBD Nodeplugin
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ceph-csi-rbd-nodeplugin
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: ceph-csi-rbd
+    app.kubernetes.io/component: nodeplugin
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - ceph-csi
+  selector:
+    matchLabels:
+      app: ceph-csi-rbd
+      component: nodeplugin
+  endpoints:
+    - port: http-metrics
+      interval: 30s
+      path: /metrics
+---
+# ServiceMonitor for Ceph CSI RBD Provisioner
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ceph-csi-rbd-provisioner
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: ceph-csi-rbd
+    app.kubernetes.io/component: provisioner
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - ceph-csi
+  selector:
+    matchLabels:
+      app: ceph-csi-rbd
+      component: provisioner
+  endpoints:
+    - port: http-metrics
+      interval: 30s
+      path: /metrics

@@ -1,0 +1,21 @@
+---
+# PodMonitor for ArgoCD components (metrics exposed on pods, not services)
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: argocd
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: argocd
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - argocd
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: argocd
+  podMetricsEndpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
