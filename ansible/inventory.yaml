@@ -30,9 +30,3 @@ all:
         pve-gamma:
           ansible_host: 192.168.7.235
 
-    extra:
-      hosts:
-        code-server:
-          ansible_host: 192.168.7.240
-        pdm:
-          ansible_host: 192.168.7.241

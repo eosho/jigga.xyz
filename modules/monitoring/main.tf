@@ -59,14 +59,14 @@ grafana:
         gnetId: 1860
         revision: 30
         datasource: Prometheus
-  # Additional data sources (DISABLED - Loki/Tempo not deployed)
-  # additionalDataSources:
-  #   - name: Loki
-  #     type: loki
-  #     url: http://loki-gateway.monitoring.svc.cluster.local
-  #   - name: Tempo
-  #     type: tempo
-  #     url: http://tempo.monitoring.svc.cluster.local:3100
+  # Additional data sources
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      url: http://loki-gateway.monitoring.svc.cluster.local
+    # - name: Tempo
+    #   type: tempo
+    #   url: http://tempo.monitoring.svc.cluster.local:3100
 
 prometheus:
   prometheusSpec:
@@ -201,89 +201,171 @@ resource "kubernetes_endpoints_v1" "etcd_metrics" {
 }
 
 
-# Loki Stack for Log Collection (DISABLED - uncomment to enable)
-# resource "helm_release" "loki" {
-#   count = var.deploy_monitoring ? 1 : 0
-#
-#   depends_on = [helm_release.kube_prometheus_stack]
-#
-#   name       = "loki"
-#   repository = "https://grafana.github.io/helm-charts"
-#   chart      = "loki"
-#   version    = "5.8.9"
-#   namespace  = "monitoring"
-#
-#   wait  = true
-#   timeout = 600 # 10 minutes
-#
-#   values = [<<EOF
-# loki:
-#   auth_enabled: false
-#   commonConfig:
-#     replication_factor: 1
-#   storage:
-#     type: 'filesystem'
-#   schemaConfig:
-#     configs:
-#       - from: 2020-10-24
-#         store: boltdb-shipper
-#         object_store: filesystem
-#         schema: v11
-#         index:
-#           prefix: index_
-#           period: 24h
-#   storageConfig:
-#     boltdb_shipper:
-#       active_index_directory: /data/loki/boltdb-shipper-active
-#       cache_location: /data/loki/boltdb-shipper-cache
-#       cache_ttl: 24h
-#       shared_store: filesystem
-#     filesystem:
-#       directory: /data/loki/chunks
-#
-# # Use single binary mode for simplicity
-# singleBinary:
-#   replicas: 1
-#   persistence:
-#     storageClass: ceph-rbd
-#     size: 5Gi
-#
-# # Disable scalable deployment
-# read:
-#   enabled: false
-# write:
-#   enabled: false
-# backend:
-#   enabled: false
-#
-# gateway:
-#   enabled: true
-# EOF
-#   ]
-# }
+# Loki Stack for Log Collection
+resource "helm_release" "loki" {
+  count = var.deploy_monitoring ? 1 : 0
 
-# Promtail for Log Collection (DISABLED - uncomment to enable)
-# resource "helm_release" "promtail" {
-#   count = var.deploy_monitoring ? 1 : 0
-#
-#   depends_on = [helm_release.loki]
-#
-#   name       = "promtail"
-#   repository = "https://grafana.github.io/helm-charts"
-#   chart      = "promtail"
-#   version    = "6.15.3"
-#   namespace  = "monitoring"
-#
-#   wait = true
-#   timeout = 300 # 5 minutes
-#
-#   values = [<<EOF
-# config:
-#   clients:
-#     - url: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
-# EOF
-#   ]
-# }
+  depends_on = [helm_release.kube_prometheus_stack]
+
+  name       = "loki"
+  repository = "https://grafana.github.io/helm-charts"
+  chart      = "loki"
+  version    = "6.29.0"
+  namespace  = "monitoring"
+
+  wait    = true
+  timeout = 600 # 10 minutes
+
+  values = [<<EOF
+# Deploy mode: singleBinary for small clusters
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: 'filesystem'
+  schemaConfig:
+    configs:
+      - from: 2020-10-24
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+  limits_config:
+    retention_period: 168h
+
+# Single binary deployment
+singleBinary:
+  replicas: 1
+  persistence:
+    storageClass: ceph-rbd
+    size: 5Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Disable distributed components
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+
+# Gateway routes to single binary
+gateway:
+  enabled: true
+
+# Disable caches not needed in single binary
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+
+# Keep canary enabled for helm test validation  
+lokiCanary:
+  enabled: true
+
+# Disable helm test
+test:
+  enabled: false
+EOF
+  ]
+}
+
+# Grafana Alloy for Log Collection (replaces deprecated Promtail)
+resource "helm_release" "alloy" {
+  count = var.deploy_monitoring ? 1 : 0
+
+  depends_on = [helm_release.loki]
+
+  name       = "alloy"
+  repository = "https://grafana.github.io/helm-charts"
+  chart      = "alloy"
+  version    = "1.5.2"
+  namespace  = "monitoring"
+
+  wait    = true
+  timeout = 300 # 5 minutes
+
+  values = [<<EOF
+alloy:
+  configMap:
+    content: |
+      // Discover pods and collect logs
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      // Relabel discovered pods with labels for Argo Workflows
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          target_label  = "node"
+        }
+        // Argo Workflows labels for log querying
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_workflows_argoproj_io_workflow"]
+          target_label  = "workflow"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_workflows_argoproj_io_workflow_template"]
+          target_label  = "workflow_template"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_annotation_workflows_argoproj_io_node_name"]
+          target_label  = "node_name"
+        }
+      }
+
+      // Collect logs from pods
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pods.output
+        forward_to = [loki.write.default.receiver]
+      }
+
+      // Send logs to Loki
+      loki.write "default" {
+        endpoint {
+          url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
+        }
+      }
+
+controller:
+  type: daemonset
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+EOF
+  ]
+}
 
 # Tempo for Distributed Tracing (DISABLED - uncomment to enable)
 # resource "helm_release" "tempo" {
