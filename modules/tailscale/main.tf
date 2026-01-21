@@ -76,7 +76,7 @@ resource "helm_release" "tailscale_operator" {
   repository = "https://pkgs.tailscale.com/helmcharts"
   chart      = "tailscale-operator"
   namespace  = kubernetes_namespace_v1.tailscale[0].metadata[0].name
-  version    = "1.92.4"
+  version    = "1.92.5"
 
   # Wait for CRDs to be established
   wait = true
