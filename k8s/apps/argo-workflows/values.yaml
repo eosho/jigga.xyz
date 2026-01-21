@@ -32,7 +32,7 @@ controller:
   persistence:
     archive: true
     postgresql:
-      host: postgres-rw.postgres.svc.cluster.local
+      host: postgres-cluster-rw.postgres.svc.cluster.local
       port: 5432
       database: argo_workflows
       tableName: argo_workflows
