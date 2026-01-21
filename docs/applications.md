@@ -101,41 +101,14 @@ All `*.int.jigga.xyz` endpoints require one of:
 
 ---
 
-## Scheduled Tasks (Argo Workflows)
+## Scheduled Tasks
 
-Scheduled maintenance tasks run as Argo CronWorkflows in the `argo-workflows` namespace:
+Scheduled maintenance tasks (backups, cleanup jobs) run as Argo CronWorkflows.
 
-| CronWorkflow | Schedule | Description |
-|--------------|----------|-------------|
-| `cleanup-completed-jobs` | Sunday 3:00 UTC | Removes completed/failed pods (>7d), old jobs (>14d), and stale events (>7d) |
-| `cleanup-evicted-pods` | Daily 4:00 UTC | Removes pods evicted due to resource pressure |
-| `postgres-daily-backup` | Daily 2:00 UTC | Full PostgreSQL backup to NFS |
-| `cluster-weekly-health` | Weekly Monday 6:00 UTC | Cluster health check |
+- **UI**: https://workflows.int.jigga.xyz
+- **Namespace**: `argo-workflows`
 
-### Manual Execution
-
-```bash
-# Run cleanup manually via Argo Workflows UI or CLI
-kubectl -n argo-workflows create -f - <<EOF
-apiVersion: argoproj.io/v1alpha1
-kind: Workflow
-metadata:
-  generateName: manual-cleanup-
-spec:
-  workflowTemplateRef:
-    name: cleanup-completed-jobs
-EOF
-
-# Or submit from template
-argo -n argo-workflows submit --from=cronwf/cleanup-completed-jobs
-```
-
-### View Logs
-
-```bash
-# Via Argo Workflows UI at https://workflows.int.jigga.xyz
-# Or via kubectl
-kubectl -n argo-workflows logs -l workflows.argoproj.io/workflow --tail=100
-```
-
-> **Note:** Certificate monitoring is handled via PrometheusRules in `k8s/platform/monitoring/alerts/certificate-alerts.yaml`.
+See [Maintenance Guide](maintenance-guide.md#scheduled-tasks-argo-workflows) for details on:
+- PostgreSQL backup & restore procedures
+- Cleanup job schedules
+- Manual workflow execution

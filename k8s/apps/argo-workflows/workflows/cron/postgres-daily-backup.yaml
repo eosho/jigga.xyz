@@ -1,5 +1,4 @@
-# Daily Postgres Backup CronWorkflow
-# Matches the existing postgres-daily-backup CronJob in postgres namespace
+# Daily PostgreSQL backup using pg_dumpall to NFS
 apiVersion: argoproj.io/v1alpha1
 kind: CronWorkflow
 metadata:

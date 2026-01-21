@@ -1,0 +1,104 @@
+# Argo Workflows Alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: argo-workflows-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: argo-workflows
+    app.kubernetes.io/component: alerts
+    prometheus: k8s
+    role: alert-rules
+spec:
+  groups:
+    - name: argo-workflows.rules
+      rules:
+        - alert: ArgoWorkflowsControllerNotLeader
+          expr: argo_workflows_is_leader == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Argo Workflows controller has no leader"
+            description: "Argo Workflows controller has had no leader for 5 minutes. Workflows cannot be processed."
+
+        - alert: ArgoWorkflowsHasFailedWorkflows
+          expr: argo_workflows_gauge{status="Failed"} > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "There are {{ $value }} failed Argo Workflows"
+            description: "Failed workflows exist and have not been cleaned up. Check Argo UI for details."
+
+        - alert: ArgoWorkflowsHasErroredWorkflows
+          expr: argo_workflows_gauge{status="Error"} > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "There are {{ $value }} errored Argo Workflows"
+            description: "Errored workflows exist. Check Argo UI for details."
+
+        - alert: ArgoWorkflowsPendingTooLong
+          expr: argo_workflows_gauge{status="Pending"} > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Workflows pending for over 15 minutes"
+            description: "{{ $value }} workflows have been pending for more than 15 minutes. Check for resource constraints."
+
+        - alert: ArgoCronWorkflowSpecError
+          expr: increase(argo_workflows_error_count{cause="CronWorkflowSpecError"}[1h]) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CronWorkflow spec errors detected"
+            description: "CronWorkflow spec errors occurred in the last hour. Check CronWorkflow definitions."
+
+        - alert: ArgoCronWorkflowSubmissionError
+          expr: increase(argo_workflows_error_count{cause="CronWorkflowSubmissionError"}[1h]) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "CronWorkflow submission errors detected"
+            description: "CronWorkflow submission errors occurred in the last hour."
+
+        - alert: ArgoWorkflowsQueueBacklog
+          expr: argo_workflows_queue_depth_gauge > 50
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Argo Workflows queue has large backlog"
+            description: "Argo Workflows queue has {{ $value }} items waiting for more than 15 minutes."
+
+        - alert: ArgoWorkflowsQueueStuck
+          expr: argo_workflows_queue_longest_running > 300
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Argo Workflows queue item stuck"
+            description: "An item has been in the queue for {{ $value }} seconds."
+
+        - alert: ArgoWorkflowsPodsMissing
+          expr: argo_workflows_pod_missing > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Argo Workflows has missing pods"
+            description: "{{ $value }} workflow pods are missing. This may indicate node issues or evictions."
+
+        - alert: ArgoWorkflowsPodsPendingHigh
+          expr: argo_workflows_pod_pending_count > 10
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Many workflow pods pending"
+            description: "{{ $value }} workflow pods are pending. Check for resource constraints or scheduling issues."

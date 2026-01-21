@@ -80,7 +80,7 @@ spec:
     name: postgres-superuser
 
   # Backup configuration using Ceph volume snapshots
-  # For NFS backup, use external pg_dump CronJob (see scheduled-backup.yaml)
+  # For NFS backup, see Argo Workflows postgres-daily-backup CronWorkflow
   backup:
     volumeSnapshot:
       className: ceph-rbd

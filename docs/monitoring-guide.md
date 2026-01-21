@@ -116,12 +116,14 @@ Alert rules are defined in `k8s/platform/monitoring/alerts/`:
 ```
 alerts/
 ├── kustomization.yaml
-├── cluster-alerts.yaml      # Node CPU, memory, disk
-├── certificate-alerts.yaml  # TLS cert expiry
-├── kubernetes-alerts.yaml   # Pod crashes, deployments, PVCs
-├── traefik-alerts.yaml      # Ingress health and errors
-├── argocd-alerts.yaml       # GitOps sync status
-└── vaultwarden-alerts.yaml  # Password manager health
+├── cluster-alerts.yaml         # Node CPU, memory, disk
+├── certificate-alerts.yaml     # TLS cert expiry
+├── kubernetes-alerts.yaml      # Pod crashes, deployments, PVCs
+├── traefik-alerts.yaml         # Ingress health and errors
+├── argocd-alerts.yaml          # GitOps sync status
+├── argo-workflows-alerts.yaml  # Workflow failures, controller health
+├── vaultwarden-alerts.yaml     # Password manager health
+└── postgres-alerts.yaml        # Database health and backup status
 ```
 
 ### Adding New Alerts

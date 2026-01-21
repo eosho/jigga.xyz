@@ -80,57 +80,17 @@ spec:
             summary: "PostgreSQL disk usage above 80%"
             description: "PostgreSQL database {{ $labels.datname }} is using {{ $value }}% of allocated storage."
 
-        # Backup Alerts (CronJob-based pg_dumpall backups)
-        - alert: PostgresBackupJobFailed
+        # Backup Alert - ensures scheduled backups are running
+        # Note: Failed workflow detection handled by argo-workflows-alerts.yaml
+        - alert: PostgresBackupWorkflowMissing
           expr: |
-            kube_job_status_failed{namespace="postgres", job_name=~"postgres-daily-backup.*"} > 0
-          for: 1m
-          labels:
-            severity: critical
-          annotations:
-            summary: "PostgreSQL backup job failed"
-            description: "PostgreSQL backup job {{ $labels.job_name }} has failed. Check job logs for details."
-
-        - alert: PostgresBackupJobMissing
-          expr: |
-            (time() - kube_cronjob_status_last_successful_time{namespace="postgres", cronjob="postgres-daily-backup"}) > 90000
-          for: 5m
+            absent(argo_workflows_workflowtemplate_triggered_total{name="postgres-backup"} > 0)
+          for: 26h
           labels:
             severity: warning
           annotations:
-            summary: "No successful PostgreSQL backup in 25 hours"
-            description: "PostgreSQL backup CronJob has not completed successfully in {{ $value | humanizeDuration }}."
-
-        - alert: PostgresBackupJobStuck
-          expr: |
-            kube_job_status_active{namespace="postgres", job_name=~"postgres-daily-backup.*"} > 0
-            and
-            (time() - kube_job_status_start_time{namespace="postgres", job_name=~"postgres-daily-backup.*"}) > 1800
-          for: 5m
-          labels:
-            severity: warning
-          annotations:
-            summary: "PostgreSQL backup job running too long"
-            description: "PostgreSQL backup job {{ $labels.job_name }} has been running for over 30 minutes."
-
-        # Legacy CloudNativePG backup alerts (kept for future use)
-        - alert: PostgresBackupFailed
-          expr: cnpg_backup_info{status="failed"} > 0
-          for: 1m
-          labels:
-            severity: critical
-          annotations:
-            summary: "PostgreSQL backup failed"
-            description: "PostgreSQL backup {{ $labels.backup }} for cluster {{ $labels.cluster }} has failed."
-
-        - alert: PostgresNoRecentBackup
-          expr: time() - cnpg_backup_info{status="completed"} > 86400 * 2
-          for: 1h
-          labels:
-            severity: warning
-          annotations:
-            summary: "No recent PostgreSQL backup"
-            description: "PostgreSQL cluster {{ $labels.cluster }} has no successful backup in the last 48 hours."
+            summary: "No PostgreSQL backup triggered in 26 hours"
+            description: "PostgreSQL backup CronWorkflow has not been triggered. Check if CronWorkflow is suspended or controller is down."
 
         # WAL Archiving
         - alert: PostgresWALArchivingBehind

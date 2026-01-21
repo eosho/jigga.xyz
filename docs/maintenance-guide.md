@@ -36,6 +36,8 @@ flowchart LR
 - Log aggregation to Loki
 - Certificate renewal checks (cert-manager)
 - ArgoCD sync status monitoring
+- PostgreSQL backup (2:00 UTC via Argo Workflows)
+- Evicted pod cleanup (4:00 UTC via Argo Workflows)
 
 ### Weekly
 
@@ -43,6 +45,8 @@ flowchart LR
 - Check Ceph cluster health
 - Verify backup integrity
 - Review Tailscale device status
+- Completed jobs cleanup (Sunday 3:00 UTC via Argo Workflows)
+- Cluster health check (Monday 6:00 UTC via Argo Workflows)
 
 ### Monthly
 
@@ -357,6 +361,61 @@ pvesh get /cluster/sdn/vnets/k3svnet/subnets
 
 ## Backup Procedures
 
+### PostgreSQL Backup (Argo Workflows)
+
+PostgreSQL backups run automatically daily at 2:00 UTC via Argo CronWorkflows.
+
+```bash
+# Check backup status
+kubectl -n argo-workflows get cronwf postgres-daily-backup
+
+# View recent backup workflows
+kubectl -n argo-workflows get wf -l workflows.argoproj.io/cron-workflow=postgres-daily-backup
+
+# Trigger manual backup
+kubectl -n argo-workflows create -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: manual-backup-
+spec:
+  workflowTemplateRef:
+    name: postgres-backup
+EOF
+
+# List available backups (stored on NFS)
+kubectl run --rm -it backup-list --image=alpine:3.19 --restart=Never -- \
+  sh -c "ls -lht /backup/postgres-backup-*.sql.gz | head -10"
+```
+
+Backups are stored at: `192.168.1.246:/mnt/truenas-pool/pve/k8s/postgres`
+
+### PostgreSQL Restore
+
+```bash
+# Restore single database (includes approval gate)
+kubectl -n argo-workflows create -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: restore-
+spec:
+  workflowTemplateRef:
+    name: postgres-restore
+  arguments:
+    parameters:
+      - name: backup-file
+        value: "latest"           # or specific file name
+      - name: target-database
+        value: "gatus"            # empty for full restore
+      - name: skip-approval
+        value: "false"            # set "true" for emergencies
+EOF
+
+# Monitor restore progress
+kubectl -n argo-workflows get wf -w
+```
+
 ### ArgoCD Application Backup
 
 ```bash
@@ -384,6 +443,139 @@ cp terraform.tfstate terraform.tfstate.backup.$(date +%Y%m%d)
 
 # Consider remote state backend (S3, GCS, etc.)
 ```
+
+---
+
+## Scheduled Tasks (Argo Workflows)
+
+All scheduled maintenance tasks run as Argo CronWorkflows in the `argo-workflows` namespace.
+
+### Argo Workflows UI
+
+Access the workflow UI at **https://workflows.int.jigga.xyz**
+
+### CronWorkflow Schedule
+
+| CronWorkflow | Schedule | Description |
+|--------------|----------|-------------|
+| `postgres-daily-backup` | Daily 2:00 UTC | Full PostgreSQL backup to NFS |
+| `cleanup-evicted-pods` | Daily 4:00 UTC | Removes pods evicted due to resource pressure |
+| `cleanup-completed-jobs` | Sunday 3:00 UTC | Removes completed/failed pods (>7d), old jobs (>14d), stale events (>7d) |
+| `cluster-weekly-health` | Monday 6:00 UTC | Cluster health check |
+
+### View CronWorkflow Status
+
+```bash
+# List all CronWorkflows
+kubectl -n argo-workflows get cronwf
+
+# Check specific CronWorkflow
+kubectl -n argo-workflows describe cronwf postgres-daily-backup
+
+# View recent workflow runs
+kubectl -n argo-workflows get wf --sort-by=.metadata.creationTimestamp | tail -10
+```
+
+### Manual Workflow Execution
+
+```bash
+# Trigger manual backup
+kubectl -n argo-workflows create -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: manual-backup-
+spec:
+  workflowTemplateRef:
+    name: postgres-backup
+EOF
+
+# Trigger manual cleanup
+kubectl -n argo-workflows create -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: manual-cleanup-
+spec:
+  workflowTemplateRef:
+    name: cleanup-completed-jobs
+EOF
+```
+
+### Database Restore Workflow
+
+The `postgres-restore` workflow includes a **manual approval gate** by default.
+
+```bash
+# Restore single database (with approval)
+kubectl -n argo-workflows create -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: restore-
+spec:
+  workflowTemplateRef:
+    name: postgres-restore
+  arguments:
+    parameters:
+      - name: backup-file
+        value: "latest"           # or specific file like postgres-backup-20260120-020000.sql.gz
+      - name: target-database
+        value: "gatus"            # leave empty for full cluster restore
+      - name: skip-approval
+        value: "false"            # set "true" to skip approval (emergencies only)
+EOF
+
+# Monitor workflow progress
+kubectl -n argo-workflows get wf -w
+
+# Resume workflow after approval (in UI or via kubectl)
+kubectl -n argo-workflows resume <workflow-name>
+```
+
+### List Available Backups
+
+```bash
+# Via Argo Workflow (recommended)
+kubectl -n argo-workflows create -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: list-backups-
+spec:
+  workflowTemplateRef:
+    name: postgres-restore
+  arguments:
+    parameters:
+      - name: backup-file
+        value: "latest"
+EOF
+# Then check the list-backups step output
+
+# Or directly check NFS
+kubectl run --rm -it backup-list --image=alpine:3.19 --restart=Never -- \
+  sh -c "ls -lht /backup/postgres-backup-*.sql.gz 2>/dev/null | head -10 || echo 'Mount backup volume first'"
+```
+
+Backups are stored at: `192.168.1.246:/mnt/truenas-pool/pve/k8s/postgres`
+
+### View Workflow Logs
+
+```bash
+# List workflows
+kubectl -n argo-workflows get wf
+
+# Get workflow details
+kubectl -n argo-workflows describe wf <workflow-name>
+
+# View logs for a workflow
+kubectl -n argo-workflows logs <workflow-name>
+
+# View logs for specific step
+kubectl -n argo-workflows logs <workflow-name> -c main
+```
+
+---
 
 ## Disaster Recovery
 

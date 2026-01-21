@@ -39,12 +39,12 @@ flowchart TB
     apps -->|"DATABASE_URL"| rw
 
     subgraph backup["Backup (Daily 2AM UTC)"]
-        cronjob["CronJob<br/>pg_dumpall"]
+        argo["Argo Workflows<br/>CronWorkflow"]
         nfs["NFS Storage<br/>192.168.1.246"]
     end
 
-    cronjob -->|"Dump"| primary
-    cronjob -->|"Store .sql.gz"| nfs
+    argo -->|"pg_dumpall"| primary
+    argo -->|"Store .sql.gz"| nfs
 ```
 
 ### Data Flow
@@ -115,7 +115,7 @@ kubectl get secret postgres-superuser -n postgres -o jsonpath='{.data.password}'
 
 ### Schedule
 
-Daily at **2:00 AM UTC** via Kubernetes CronJob.
+Daily at **2:00 AM UTC** via Argo Workflows CronWorkflow.
 
 ### Backup Method
 
@@ -127,34 +127,62 @@ Daily at **2:00 AM UTC** via Kubernetes CronJob.
 ### Manual Backup
 
 ```bash
-# Trigger immediate backup
-kubectl create job --from=cronjob/postgres-daily-backup postgres-backup-manual -n postgres
+# Trigger immediate backup via Argo Workflows
+kubectl -n argo-workflows create -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: manual-backup-
+spec:
+  workflowTemplateRef:
+    name: postgres-backup
+EOF
 
 # Check backup status
-kubectl get jobs -n postgres -l app.kubernetes.io/component=backup
+kubectl -n argo-workflows get wf -l workflows.argoproj.io/workflow-template=postgres-backup
 
 # View backup logs
-kubectl logs -n postgres -l job-name=postgres-backup-manual
+kubectl -n argo-workflows logs -l workflows.argoproj.io/workflow-template=postgres-backup --tail=50
 ```
 
 ### List Backups
 
 ```bash
+# Via scripts
 ./scripts/postgres-restore.sh --list
+
+# Or check NFS directly
+kubectl run --rm -it backup-list --image=alpine:3.19 --restart=Never -- \
+  sh -c "ls -lht /backup/postgres-backup-*.sql.gz | head -10"
 ```
 
 ### Restore
 
+Restore is handled via Argo Workflows with an approval gate:
+
 ```bash
-# Verify backup contents
-./scripts/postgres-restore.sh postgres-backup-YYYYMMDD-HHMMSS.sql.gz --verify
+# Restore specific database (with approval gate)
+kubectl -n argo-workflows create -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: restore-
+spec:
+  workflowTemplateRef:
+    name: postgres-restore
+  arguments:
+    parameters:
+      - name: backup-file
+        value: "latest"
+      - name: target-database
+        value: "gatus"
+EOF
 
-# Restore all databases
-./scripts/postgres-restore.sh postgres-backup-YYYYMMDD-HHMMSS.sql.gz
-
-# Restore specific database
+# Or use the restore script for local execution
 ./scripts/postgres-restore.sh postgres-backup-YYYYMMDD-HHMMSS.sql.gz --database gatus
 ```
+
+See [Maintenance Guide](../../docs/maintenance-guide.md#scheduled-tasks-argo-workflows) for full restore procedures.
 
 ## Monitoring
 
@@ -175,8 +203,8 @@ kubectl get secret pgadmin-secret -n pgadmin -o jsonpath='{.data.PGADMIN_DEFAULT
 | `PostgresClusterNoLeader` | Critical | No primary instance |
 | `PostgresReplicationLagHigh` | Warning | Replication lag > 30s |
 | `PostgresConnectionsHigh` | Warning | Connections > 80% |
-| `PostgresBackupJobFailed` | Critical | Backup CronJob failed |
-| `PostgresBackupJobMissing` | Warning | No backup in 25 hours |
+| `PostgresBackupWorkflowFailed` | Critical | Backup workflow failed |
+| `PostgresBackupWorkflowMissing` | Warning | No backup in 25 hours |
 
 ### Useful Commands
 
@@ -230,14 +258,17 @@ kubectl describe cluster.postgresql.cnpg.io postgres-cluster -n postgres
 ### Backup Failed
 
 ```bash
-# Check CronJob status
-kubectl get cronjob postgres-daily-backup -n postgres
+# Check Argo CronWorkflow status
+kubectl -n argo-workflows get cronwf postgres-daily-backup
 
-# Check recent job logs
-kubectl logs -n postgres -l app.kubernetes.io/component=backup --tail=50
+# Check recent workflow runs
+kubectl -n argo-workflows get wf -l workflows.argoproj.io/cron-workflow=postgres-daily-backup
 
-# Verify NFS mount
-kubectl exec -it postgres-cluster-1 -n postgres -- ls -la /backup/
+# View workflow logs
+kubectl -n argo-workflows logs <workflow-name>
+
+# Verify NFS mount (from workflow pod or manually)
+kubectl run --rm -it nfs-check --image=alpine:3.19 --restart=Never -- ls -la /backup/
 ```
 
 ### Connection Issues
@@ -255,10 +286,12 @@ k8s/apps/postgres/
 ├── config/
 │   └── backup-volume.yaml    # NFS PV/PVC for backups
 ├── workload/
-│   ├── cluster.yaml          # CloudNativePG Cluster resource
-│   └── scheduled-backup.yaml # Backup CronJob
+│   └── cluster.yaml          # CloudNativePG Cluster resource
 ├── kustomization.yaml
 ├── namespace.yaml
 ├── secret-generator.yaml     # KSOPS generator for secrets
 └── README.md
 ```
+
+Note: Scheduled backups are managed by Argo Workflows CronWorkflows.
+See `k8s/apps/argo-workflows/workflows/cron/postgres-daily-backup.yaml`.
