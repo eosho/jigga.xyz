@@ -75,13 +75,13 @@ controller:
       serviceAccountName: argo-workflow
       # Default TTL for completed workflows
       ttlStrategy:
-        secondsAfterCompletion: 86400  # 1 day
-        secondsAfterSuccess: 43200      # 12 hours
-        secondsAfterFailure: 172800     # 2 days
+        secondsAfterCompletion: 86400 # 1 day
+        secondsAfterSuccess: 43200 # 12 hours
+        secondsAfterFailure: 172800 # 2 days
       # Pod garbage collection - delay deletion to allow log viewing
       podGC:
         strategy: OnWorkflowSuccess
-        deleteDelayDuration: 300s  # Keep pods for 5 minutes after success
+        deleteDelayDuration: 300s # Keep pods for 5 minutes after success
 
 # Argo Server (UI)
 server:
@@ -114,6 +114,16 @@ server:
     level: info
     format: json
 
+  # Links to external systems (Grafana/Loki for logs)
+  # See: https://argo-workflows.readthedocs.io/en/latest/configure-archive-logs/#suggested-alternatives
+  links:
+    - name: Workflow Logs
+      scope: workflow
+      url: "https://grafana.jigga.xyz/explore?orgId=1&left=%7B%22datasource%22:%22loki%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bnamespace%3D%5C%22argo-workflows%5C%22,%20workflow%3D%5C%22${metadata.name}%5C%22%7D%22%7D%5D%7D"
+    - name: Pod Logs
+      scope: pod-logs
+      url: "https://grafana.jigga.xyz/explore?orgId=1&left=%7B%22datasource%22:%22loki%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bnamespace%3D%5C%22argo-workflows%5C%22,%20pod%3D%5C%22${metadata.name}%5C%22%7D%22%7D%5D%7D"
+
 # Executor settings for workflow pods
 executor:
   resources:
@@ -123,7 +133,8 @@ executor:
     limits:
       cpu: 100m
       memory: 128Mi
-
-# Artifact Repository - use emptyDir for now (can configure S3/GCS later)
-artifactRepository:
-  archiveLogs: true
+# Artifact Repository - Not using archiveLogs (not recommended per Argo docs)
+# Logs are collected by Grafana Alloy and stored in Loki
+# See: https://argo-workflows.readthedocs.io/en/latest/configure-archive-logs/#suggested-alternatives
+# artifactRepository:
+#   archiveLogs: false
