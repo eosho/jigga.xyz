@@ -1,0 +1,166 @@
+# ConfigMap containing the postgres-restore script
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-scripts
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: argo-workflows
+    app.kubernetes.io/component: scripts
+data:
+  postgres-restore.sh: |
+    #!/bin/bash
+    # PostgreSQL Restore Script for Argo Workflows
+    # Simplified version of scripts/postgres-restore.sh
+    set -euo pipefail
+
+    NAMESPACE="postgres"
+    CLUSTER_NAME="postgres-cluster"
+    BACKUP_FILE="${BACKUP_FILE:-}"
+    TARGET_DATABASE="${TARGET_DATABASE:-}"
+
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    NC='\033[0m'
+
+    log_info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
+    log_warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
+    log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+    die() { log_error "$1"; exit 1; }
+
+    find_primary_pod() {
+      kubectl -n "$NAMESPACE" get pods \
+        -l "cnpg.io/cluster=${CLUSTER_NAME},cnpg.io/instanceRole=primary" \
+        -o jsonpath='{.items[0].metadata.name}'
+    }
+
+    reset_database_via_primary() {
+      local primary_pod="$1"
+      local db="$2"
+
+      case "$db" in
+        postgres|template0|template1)
+          die "Refusing to reset protected database: $db"
+          ;;
+      esac
+
+      log_info "Resetting database (drop+create): $db"
+      kubectl -n "$NAMESPACE" exec "$primary_pod" -- psql -U postgres -d postgres -c \
+        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='${db}' AND pid <> pg_backend_pid();" 2>/dev/null || true
+      kubectl -n "$NAMESPACE" exec "$primary_pod" -- psql -U postgres -d postgres -c \
+        "DROP DATABASE IF EXISTS \"${db}\";"
+      kubectl -n "$NAMESPACE" exec "$primary_pod" -- psql -U postgres -d postgres -c \
+        "CREATE DATABASE \"${db}\";"
+    }
+
+    ensure_app_permissions() {
+      local primary_pod="$1"
+      local db="$2"
+
+      log_info "Fixing ownership/privileges for role app on $db"
+      kubectl -n "$NAMESPACE" exec "$primary_pod" -- psql -U postgres -d postgres -c \
+        "ALTER DATABASE \"${db}\" OWNER TO app;" 2>/dev/null || true
+      kubectl -n "$NAMESPACE" exec "$primary_pod" -- psql -U postgres -d "$db" -c \
+        "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO app;" 2>/dev/null || true
+      kubectl -n "$NAMESPACE" exec "$primary_pod" -- psql -U postgres -d "$db" -c \
+        "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO app;" 2>/dev/null || true
+      kubectl -n "$NAMESPACE" exec "$primary_pod" -- psql -U postgres -d "$db" -c \
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO app;" 2>/dev/null || true
+      kubectl -n "$NAMESPACE" exec "$primary_pod" -- psql -U postgres -d "$db" -c \
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO app;" 2>/dev/null || true
+    }
+
+    stream_db_section_into_primary() {
+      local primary_pod="$1"
+      local db="$2"
+      local backup_file="$3"
+
+      log_info "Streaming restore for $db..."
+      {
+        echo "SET session_replication_role = replica;"
+        gunzip -c "/backup/$backup_file" | awk -v db="$db" '
+          $1=="\\connect" {
+            name=$2; gsub(/^"|"$/, "", name)
+            if(in_db) exit
+            if(name==db){ in_db=1; next }
+          }
+          in_db {
+            if($1=="CREATE" && $2=="DATABASE") exit
+            if($1=="ALTER" && $2=="DATABASE") exit
+            if($1=="COMMENT" && $2=="ON" && $3=="DATABASE") exit
+            print
+          }
+        '
+        echo "SET session_replication_role = origin;"
+      } | kubectl -n "$NAMESPACE" exec -i "$primary_pod" -- psql -U postgres -d "$db" -v ON_ERROR_STOP=0
+    }
+
+    discover_dbs_in_dump() {
+      local backup_file="$1"
+      gunzip -c "/backup/$backup_file" \
+        | sed -n 's/^\\connect[[:space:]]\+\([^ ]*\).*/\1/p' \
+        | grep -vE '^(template0|template1|postgres)$' \
+        | sort -u
+    }
+
+    restore_database() {
+      local primary_pod="$1"
+      local db="$2"
+      local backup_file="$3"
+
+      echo "=========================================="
+      log_info "Restoring database: $db"
+      echo "=========================================="
+
+      reset_database_via_primary "$primary_pod" "$db"
+      stream_db_section_into_primary "$primary_pod" "$db" "$backup_file"
+      ensure_app_permissions "$primary_pod" "$db"
+
+      log_info "✓ Database $db restored successfully"
+      echo ""
+    }
+
+    main() {
+      echo "=========================================="
+      echo "PostgreSQL Restore (Argo Workflows)"
+      echo "=========================================="
+      echo ""
+
+      [ -n "$BACKUP_FILE" ] || die "BACKUP_FILE environment variable is required"
+      [ -f "/backup/$BACKUP_FILE" ] || die "Backup file not found: /backup/$BACKUP_FILE"
+
+      log_info "Backup file: $BACKUP_FILE"
+      log_info "Target database: ${TARGET_DATABASE:-ALL}"
+      echo ""
+
+      local primary_pod
+      primary_pod="$(find_primary_pod)"
+      [ -n "$primary_pod" ] || die "Could not find CNPG primary pod"
+      log_info "Using primary pod: $primary_pod"
+      echo ""
+
+      if [ -n "$TARGET_DATABASE" ]; then
+        restore_database "$primary_pod" "$TARGET_DATABASE" "$BACKUP_FILE"
+      else
+        log_info "Discovering databases in backup..."
+        local dbs
+        dbs="$(discover_dbs_in_dump "$BACKUP_FILE")"
+        [ -n "$dbs" ] || die "No databases found in dump"
+
+        log_info "Databases to restore:"
+        echo "$dbs" | sed 's/^/  - /'
+        echo ""
+
+        while read -r db; do
+          [ -n "$db" ] || continue
+          restore_database "$primary_pod" "$db" "$BACKUP_FILE"
+        done <<< "$dbs"
+      fi
+
+      echo "=========================================="
+      log_info "✓ Restore completed successfully"
+      echo "=========================================="
+    }
+
+    main "$@"

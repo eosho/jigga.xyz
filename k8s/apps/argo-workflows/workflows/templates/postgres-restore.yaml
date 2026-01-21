@@ -1,6 +1,6 @@
 # Postgres Restore WorkflowTemplate
 # Supports full cluster restore or single database restore
-# Based on scripts/postgres-restore.sh
+# Uses the postgres-restore.sh script from ConfigMap
 apiVersion: argoproj.io/v1alpha1
 kind: WorkflowTemplate
 metadata:
@@ -26,19 +26,21 @@ spec:
         description: "Skip manual approval step (use with caution)"
         value: "false"
 
-  # NFS volume for backup storage
+  # Volumes
   volumes:
     - name: backup
       nfs:
         server: 192.168.1.246
         path: /mnt/truenas-pool/pve/k8s/postgres
+    - name: scripts
+      configMap:
+        name: postgres-scripts
+        defaultMode: 0755
 
   templates:
     # Main entrypoint with approval gate
     - name: restore-with-approval
       steps:
-        - - name: fetch-credentials
-            template: get-postgres-password
         - - name: list-backups
             template: list-available-backups
         - - name: resolve-backup
@@ -57,38 +59,19 @@ spec:
             template: manual-approval
             when: "'{{workflow.parameters.skip-approval}}' == 'false'"
         - - name: execute-restore
-            template: run-restore
+            template: run-restore-script
             arguments:
               parameters:
                 - name: backup-file
                   value: "{{steps.resolve-backup.outputs.parameters.backup-file}}"
                 - name: target-database
                   value: "{{workflow.parameters.target-database}}"
-                - name: pg-password
-                  value: "{{steps.fetch-credentials.outputs.parameters.pg-password}}"
         - - name: verify-restore
             template: verify-databases
             arguments:
               parameters:
                 - name: target-database
                   value: "{{workflow.parameters.target-database}}"
-                - name: pg-password
-                  value: "{{steps.fetch-credentials.outputs.parameters.pg-password}}"
-
-    # Fetch postgres password from postgres namespace
-    - name: get-postgres-password
-      outputs:
-        parameters:
-          - name: pg-password
-            valueFrom:
-              path: /tmp/pg-password.txt
-      container:
-        image: bitnami/kubectl:latest
-        command: ["/bin/sh", "-c"]
-        args:
-          - |
-            kubectl get secret postgres-cluster-app -n postgres -o jsonpath='{.data.password}' | base64 -d > /tmp/pg-password.txt
-            echo "Password fetched successfully"
 
     # List available backups
     - name: list-available-backups
@@ -196,110 +179,25 @@ spec:
     - name: manual-approval
       suspend: {}
 
-    # Execute the restore
-    - name: run-restore
+    # Execute the restore using the ConfigMap script
+    - name: run-restore-script
       inputs:
         parameters:
           - name: backup-file
           - name: target-database
-          - name: pg-password
       container:
         image: bitnami/kubectl:latest
-        command:
-          - /bin/bash
-          - -c
-          - |
-            set -e
-            BACKUP_FILE="{{inputs.parameters.backup-file}}"
-            TARGET_DB="{{inputs.parameters.target-database}}"
-            PG_HOST="postgres-cluster-rw.postgres.svc.cluster.local"
-            export PGPASSWORD="{{inputs.parameters.pg-password}}"
-            
-            echo "=== PostgreSQL Restore ==="
-            echo "Backup file: $BACKUP_FILE"
-            echo "Target database: ${TARGET_DB:-ALL}"
-            echo "Started at: $(date)"
-            echo ""
-            
-            # Find primary pod
-            PRIMARY_POD=$(kubectl get pods -n postgres -l cnpg.io/cluster=postgres-cluster,cnpg.io/instanceRole=primary -o jsonpath='{.items[0].metadata.name}')
-            if [ -z "$PRIMARY_POD" ]; then
-              echo "ERROR: Could not find primary postgres pod"
-              exit 1
-            fi
-            echo "Using primary pod: $PRIMARY_POD"
-            echo ""
-            
-            # Function to restore a single database
-            restore_database() {
-              local db="$1"
-              echo "--- Restoring database: $db ---"
-              
-              # Drop and recreate database using postgres user (via kubectl exec)
-              echo "Dropping existing database..."
-              kubectl exec -n postgres "$PRIMARY_POD" -- psql -U postgres -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='$db' AND pid <> pg_backend_pid();" 2>/dev/null || true
-              kubectl exec -n postgres "$PRIMARY_POD" -- psql -U postgres -d postgres -c "DROP DATABASE IF EXISTS \"$db\";"
-              kubectl exec -n postgres "$PRIMARY_POD" -- psql -U postgres -d postgres -c "CREATE DATABASE \"$db\";"
-              kubectl exec -n postgres "$PRIMARY_POD" -- psql -U postgres -d postgres -c "ALTER DATABASE \"$db\" OWNER TO app;"
-              
-              # Extract and restore database section from pg_dumpall
-              echo "Restoring data..."
-              {
-                echo "SET session_replication_role = replica;"
-                gunzip -c "/backup/$BACKUP_FILE" | awk -v db="$db" '
-                  $1=="\\connect" {
-                    name=$2; gsub(/^"|"$/, "", name)
-                    if(in_db) exit
-                    if(name==db){ in_db=1; next }
-                  }
-                  in_db {
-                    if($1=="CREATE" && $2=="DATABASE") exit
-                    if($1=="ALTER" && $2=="DATABASE") exit
-                    if($1=="COMMENT" && $2=="ON" && $3=="DATABASE") exit
-                    print
-                  }
-                '
-                echo "SET session_replication_role = origin;"
-              } | PGPASSWORD="$PGPASSWORD" psql -h "$PG_HOST" -U app -d "$db" -v ON_ERROR_STOP=0
-              
-              # Fix permissions
-              echo "Fixing permissions..."
-              kubectl exec -n postgres "$PRIMARY_POD" -- psql -U postgres -d "$db" -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO app;" 2>/dev/null || true
-              kubectl exec -n postgres "$PRIMARY_POD" -- psql -U postgres -d "$db" -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO app;" 2>/dev/null || true
-              kubectl exec -n postgres "$PRIMARY_POD" -- psql -U postgres -d "$db" -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO app;" 2>/dev/null || true
-              
-              echo "✓ Database $db restored"
-              echo ""
-            }
-            
-            if [ -n "$TARGET_DB" ]; then
-              # Single database restore
-              restore_database "$TARGET_DB"
-            else
-              # Full restore - discover all databases
-              echo "Discovering databases in backup..."
-              DATABASES=$(gunzip -c "/backup/$BACKUP_FILE" | sed -n 's/^\\connect[[:space:]]\+\([^ ]*\).*/\1/p' | grep -vE '^(template0|template1|postgres)$' | sort -u)
-              
-              if [ -z "$DATABASES" ]; then
-                echo "ERROR: No databases found in backup"
-                exit 1
-              fi
-              
-              echo "Databases to restore:"
-              echo "$DATABASES" | sed 's/^/  - /'
-              echo ""
-              
-              for db in $DATABASES; do
-                restore_database "$db"
-              done
-            fi
-            
-            echo "=== Restore Summary ==="
-            echo "Completed at: $(date)"
-            echo "✓ All databases restored successfully"
+        command: ["/scripts/postgres-restore.sh"]
+        env:
+          - name: BACKUP_FILE
+            value: "{{inputs.parameters.backup-file}}"
+          - name: TARGET_DATABASE
+            value: "{{inputs.parameters.target-database}}"
         volumeMounts:
           - name: backup
             mountPath: /backup
+          - name: scripts
+            mountPath: /scripts
         resources:
           requests:
             cpu: 100m
@@ -313,35 +211,31 @@ spec:
       inputs:
         parameters:
           - name: target-database
-          - name: pg-password
       container:
-        image: postgres:18
+        image: bitnami/kubectl:latest
         command:
           - /bin/bash
           - -c
           - |
             set -e
             TARGET_DB="{{inputs.parameters.target-database}}"
-            PG_HOST="postgres-cluster-rw.postgres.svc.cluster.local"
-            export POSTGRES_PASSWORD="{{inputs.parameters.pg-password}}"
+            
+            PRIMARY_POD=$(kubectl get pods -n postgres -l cnpg.io/cluster=postgres-cluster,cnpg.io/instanceRole=primary -o jsonpath='{.items[0].metadata.name}')
             
             echo "=== Post-Restore Verification ==="
             echo ""
             
             if [ -n "$TARGET_DB" ]; then
-              # Verify single database
               echo "Verifying database: $TARGET_DB"
-              PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$PG_HOST" -U app -d "$TARGET_DB" -c "\dt" || echo "No tables found"
+              kubectl exec -n postgres "$PRIMARY_POD" -- psql -U postgres -d "$TARGET_DB" -c "\dt" || echo "No tables found"
               echo ""
-              PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$PG_HOST" -U app -d "$TARGET_DB" -c "SELECT count(*) as table_count FROM information_schema.tables WHERE table_schema = 'public';"
+              kubectl exec -n postgres "$PRIMARY_POD" -- psql -U postgres -d "$TARGET_DB" -c "SELECT count(*) as table_count FROM information_schema.tables WHERE table_schema = 'public';"
             else
-              # List all databases
               echo "All databases:"
-              PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$PG_HOST" -U app -d postgres -c "\l"
-              
+              kubectl exec -n postgres "$PRIMARY_POD" -- psql -U postgres -d postgres -c "\l"
               echo ""
               echo "Database sizes:"
-              PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$PG_HOST" -U app -d postgres -c "SELECT datname, pg_size_pretty(pg_database_size(datname)) as size FROM pg_database WHERE datname NOT IN ('template0', 'template1') ORDER BY pg_database_size(datname) DESC;"
+              kubectl exec -n postgres "$PRIMARY_POD" -- psql -U postgres -d postgres -c "SELECT datname, pg_size_pretty(pg_database_size(datname)) as size FROM pg_database WHERE datname NOT IN ('template0', 'template1') ORDER BY pg_database_size(datname) DESC;"
             fi
             
             echo ""
