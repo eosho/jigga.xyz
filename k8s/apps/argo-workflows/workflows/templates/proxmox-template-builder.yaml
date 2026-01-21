@@ -1,0 +1,414 @@
+# Proxmox Ubuntu Template Builder
+# Builds Ubuntu cloud-init templates on all Proxmox nodes in parallel
+# Uses SHA256 hash comparison to only rebuild when new images are available
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: proxmox-template-builder
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: argo-workflows
+    app.kubernetes.io/component: workflow-template
+  annotations:
+    workflows.argoproj.io/description: |
+      Builds Ubuntu cloud-init templates on Proxmox nodes.
+      Compares SHA256 hashes to only rebuild when new images are available.
+      Supports parallel builds across multiple nodes.
+spec:
+  entrypoint: build-templates
+  serviceAccountName: argo-workflow
+
+  arguments:
+    parameters:
+      - name: ubuntu-version
+        default: "24.04"
+        description: "Ubuntu version (22.04, 24.04, 25.04)"
+      - name: storage
+        default: "local-lvm"
+        description: "Proxmox storage for template"
+      - name: force-rebuild
+        default: "false"
+        description: "Force rebuild even if hash matches"
+      - name: nodes
+        default: '["pve-alpha", "pve-beta", "pve-gamma"]'
+        description: "JSON array of Proxmox nodes to build on"
+
+  volumes:
+    - name: ssh-key
+      secret:
+        secretName: proxmox-ssh-key
+        defaultMode: 0600
+    - name: scripts
+      configMap:
+        name: proxmox-scripts
+        defaultMode: 0755
+
+  templates:
+    # =========================================================================
+    # Main DAG - orchestrates the build process
+    # =========================================================================
+    - name: build-templates
+      dag:
+        tasks:
+          - name: validate-params
+            template: validate-parameters
+
+          - name: get-latest-hash
+            template: fetch-upstream-hash
+            dependencies: [validate-params]
+            arguments:
+              parameters:
+                - name: ubuntu-version
+                  value: "{{workflow.parameters.ubuntu-version}}"
+
+          - name: check-nodes
+            template: check-node-connectivity
+            dependencies: [validate-params]
+            arguments:
+              parameters:
+                - name: nodes
+                  value: "{{workflow.parameters.nodes}}"
+
+          - name: build-on-nodes
+            template: parallel-build
+            dependencies: [check-nodes, get-latest-hash]
+            arguments:
+              parameters:
+                - name: nodes
+                  value: "{{workflow.parameters.nodes}}"
+                - name: ubuntu-version
+                  value: "{{workflow.parameters.ubuntu-version}}"
+                - name: storage
+                  value: "{{workflow.parameters.storage}}"
+                - name: force-rebuild
+                  value: "{{workflow.parameters.force-rebuild}}"
+                - name: upstream-hash
+                  value: "{{tasks.get-latest-hash.outputs.parameters.hash}}"
+
+          - name: verify-templates
+            template: verify-all-templates
+            dependencies: [build-on-nodes]
+            arguments:
+              parameters:
+                - name: nodes
+                  value: "{{workflow.parameters.nodes}}"
+                - name: ubuntu-version
+                  value: "{{workflow.parameters.ubuntu-version}}"
+
+    # =========================================================================
+    # Validate input parameters
+    # =========================================================================
+    - name: validate-parameters
+      script:
+        image: alpine:3.19
+        command: [sh]
+        source: |
+          set -e
+          echo "Validating parameters..."
+
+          VERSION="{{workflow.parameters.ubuntu-version}}"
+          case "$VERSION" in
+            22.04|24.04|25.04)
+              echo "Valid Ubuntu version: $VERSION"
+              ;;
+            *)
+              echo "Invalid Ubuntu version: $VERSION"
+              echo "Supported: 22.04, 24.04, 25.04"
+              exit 1
+              ;;
+          esac
+
+          NODES='{{workflow.parameters.nodes}}'
+          echo "Nodes to build: $NODES"
+          echo "Parameters validated"
+
+    # =========================================================================
+    # Fetch the latest SHA256 hash from Ubuntu cloud images
+    # =========================================================================
+    - name: fetch-upstream-hash
+      inputs:
+        parameters:
+          - name: ubuntu-version
+      outputs:
+        parameters:
+          - name: hash
+            valueFrom:
+              path: /tmp/hash.txt
+          - name: codename
+            valueFrom:
+              path: /tmp/codename.txt
+      script:
+        image: alpine:3.19
+        command: [sh]
+        source: |
+          set -e
+          apk add --no-cache curl
+
+          VERSION="{{inputs.parameters.ubuntu-version}}"
+
+          # Get codename
+          case "$VERSION" in
+            22.04) CODENAME="jammy" ;;
+            24.04) CODENAME="noble" ;;
+            25.04) CODENAME="plucky" ;;
+          esac
+
+          echo "$CODENAME" > /tmp/codename.txt
+
+          echo "Fetching SHA256 hash for Ubuntu $VERSION ($CODENAME)..."
+          HASH_URL="https://cloud-images.ubuntu.com/${CODENAME}/current/SHA256SUMS"
+
+          # Download SHA256SUMS and extract hash for the amd64 cloud image
+          HASH=$(curl -sL "$HASH_URL" | grep "${CODENAME}-server-cloudimg-amd64.img" | awk '{print $1}')
+
+          if [ -z "$HASH" ]; then
+            echo "Failed to fetch hash from $HASH_URL"
+            exit 1
+          fi
+
+          echo "$HASH" > /tmp/hash.txt
+          echo "Upstream hash: $HASH"
+
+    # =========================================================================
+    # Check connectivity to all nodes
+    # =========================================================================
+    - name: check-node-connectivity
+      inputs:
+        parameters:
+          - name: nodes
+      script:
+        image: alpine:3.19
+        command: [sh]
+        source: |
+          set -e
+          apk add --no-cache openssh-client jq
+
+          NODES='{{inputs.parameters.nodes}}'
+
+          echo "Checking connectivity to Proxmox nodes..."
+
+          echo "$NODES" | jq -r '.[]' | while read node; do
+            case "$node" in
+              pve-alpha) IP="192.168.7.233" ;;
+              pve-beta)  IP="192.168.7.234" ;;
+              pve-gamma) IP="192.168.7.235" ;;
+              *) echo "Unknown node: $node"; exit 1 ;;
+            esac
+
+            echo "Testing SSH to $node ($IP)..."
+            ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+                -i /root/.ssh/id_rsa root@$IP "hostname && uptime" || {
+              echo "Failed to connect to $node"
+              exit 1
+            }
+            echo "Connected to $node"
+          done
+
+          echo "All nodes reachable"
+        volumeMounts:
+          - name: ssh-key
+            mountPath: /root/.ssh
+
+    # =========================================================================
+    # Parallel build across all nodes
+    # =========================================================================
+    - name: parallel-build
+      inputs:
+        parameters:
+          - name: nodes
+          - name: ubuntu-version
+          - name: storage
+          - name: force-rebuild
+          - name: upstream-hash
+      steps:
+        - - name: build
+            template: build-template-on-node
+            arguments:
+              parameters:
+                - name: node
+                  value: "{{item}}"
+                - name: ubuntu-version
+                  value: "{{inputs.parameters.ubuntu-version}}"
+                - name: storage
+                  value: "{{inputs.parameters.storage}}"
+                - name: force-rebuild
+                  value: "{{inputs.parameters.force-rebuild}}"
+                - name: upstream-hash
+                  value: "{{inputs.parameters.upstream-hash}}"
+            withParam: "{{inputs.parameters.nodes}}"
+
+    # =========================================================================
+    # Build template on a single node
+    # =========================================================================
+    - name: build-template-on-node
+      inputs:
+        parameters:
+          - name: node
+          - name: ubuntu-version
+          - name: storage
+          - name: force-rebuild
+          - name: upstream-hash
+      script:
+        image: alpine:3.19
+        command: [sh]
+        source: |
+          set -e
+          apk add --no-cache openssh-client
+
+          NODE="{{inputs.parameters.node}}"
+          VERSION="{{inputs.parameters.ubuntu-version}}"
+          STORAGE="{{inputs.parameters.storage}}"
+          FORCE="{{inputs.parameters.force-rebuild}}"
+          UPSTREAM_HASH="{{inputs.parameters.upstream-hash}}"
+
+          # Map node to IP and template ID offset
+          case "$NODE" in
+            pve-alpha) IP="192.168.7.233"; ID_OFFSET=0 ;;
+            pve-beta)  IP="192.168.7.234"; ID_OFFSET=100 ;;
+            pve-gamma) IP="192.168.7.235"; ID_OFFSET=200 ;;
+            *) echo "Unknown node: $NODE"; exit 1 ;;
+          esac
+
+          # Calculate template ID based on version
+          case "$VERSION" in
+            22.04) BASE_ID=9000; CODENAME="jammy" ;;
+            24.04) BASE_ID=9001; CODENAME="noble" ;;
+            25.04) BASE_ID=9002; CODENAME="plucky" ;;
+          esac
+          TEMPLATE_ID=$((BASE_ID + ID_OFFSET))
+          VERSION_SHORT="${VERSION//.}"
+
+          echo "========================================"
+          echo "Building template on $NODE"
+          echo "========================================"
+          echo "Node IP:       $IP"
+          echo "Ubuntu:        $VERSION ($CODENAME)"
+          echo "Template ID:   $TEMPLATE_ID"
+          echo "Storage:       $STORAGE"
+          echo "Force:         $FORCE"
+          echo "Upstream Hash: ${UPSTREAM_HASH:0:16}..."
+          echo "========================================"
+
+          # Check if template exists and get its hash from description
+          CURRENT_HASH=$(ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa \
+            root@$IP "qm config $TEMPLATE_ID 2>/dev/null | grep -oP 'SHA256:\K[a-f0-9]+' || echo 'none'")
+
+          echo "Current hash:  ${CURRENT_HASH:0:16}..."
+
+          # Determine if rebuild is needed
+          NEEDS_REBUILD="false"
+          if [ "$CURRENT_HASH" = "none" ]; then
+            echo "Template does not exist, will build"
+            NEEDS_REBUILD="true"
+          elif [ "$FORCE" = "true" ]; then
+            echo "Force rebuild requested"
+            NEEDS_REBUILD="true"
+          elif [ "$CURRENT_HASH" != "$UPSTREAM_HASH" ]; then
+            echo "Hash mismatch, new image available!"
+            echo "  Current:  $CURRENT_HASH"
+            echo "  Upstream: $UPSTREAM_HASH"
+            NEEDS_REBUILD="true"
+          else
+            echo "Hash matches, template is up to date"
+            NEEDS_REBUILD="false"
+          fi
+
+          if [ "$NEEDS_REBUILD" = "false" ]; then
+            echo "Skipping rebuild - template is current"
+            ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa \
+              root@$IP "qm config $TEMPLATE_ID | grep -E 'name|description'" || true
+            exit 0
+          fi
+
+          # Remove existing template if it exists
+          if [ "$CURRENT_HASH" != "none" ]; then
+            echo "Removing existing template $TEMPLATE_ID..."
+            ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa \
+              root@$IP "qm destroy $TEMPLATE_ID --purge" || true
+          fi
+
+          # Copy build script to remote node and execute
+          echo "Copying build script to $NODE..."
+          scp -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa \
+            /scripts/build-template.sh root@$IP:/tmp/build-template.sh
+
+          echo "Running template build script on $NODE..."
+          ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa root@$IP \
+            "chmod +x /tmp/build-template.sh && /tmp/build-template.sh '$VERSION' '$CODENAME' '$TEMPLATE_ID' '$STORAGE' '$VERSION_SHORT' '$UPSTREAM_HASH'"
+
+          echo "Template build complete on $NODE"
+        volumeMounts:
+          - name: ssh-key
+            mountPath: /root/.ssh
+          - name: scripts
+            mountPath: /scripts
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+
+    # =========================================================================
+    # Verify templates exist on all nodes
+    # =========================================================================
+    - name: verify-all-templates
+      inputs:
+        parameters:
+          - name: nodes
+          - name: ubuntu-version
+      script:
+        image: alpine:3.19
+        command: [sh]
+        source: |
+          set -e
+          apk add --no-cache openssh-client jq
+
+          NODES='{{inputs.parameters.nodes}}'
+          VERSION="{{inputs.parameters.ubuntu-version}}"
+
+          echo "Verifying templates on all nodes..."
+          echo "========================================"
+
+          # Calculate base template ID
+          case "$VERSION" in
+            22.04) BASE_ID=9000 ;;
+            24.04) BASE_ID=9001 ;;
+            25.04) BASE_ID=9002 ;;
+          esac
+
+          FAILED=0
+
+          echo "$NODES" | jq -r '.[]' | while read node; do
+            case "$node" in
+              pve-alpha) IP="192.168.7.233"; ID_OFFSET=0 ;;
+              pve-beta)  IP="192.168.7.234"; ID_OFFSET=100 ;;
+              pve-gamma) IP="192.168.7.235"; ID_OFFSET=200 ;;
+            esac
+
+            TEMPLATE_ID=$((BASE_ID + ID_OFFSET))
+
+            echo "Checking $node (template $TEMPLATE_ID)..."
+            if ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa \
+                 root@$IP "qm status $TEMPLATE_ID" 2>/dev/null; then
+              echo "Template $TEMPLATE_ID exists on $node"
+              ssh -o StrictHostKeyChecking=no -i /root/.ssh/id_rsa \
+                root@$IP "qm config $TEMPLATE_ID | grep -E 'name|description'"
+            else
+              echo "Template $TEMPLATE_ID NOT found on $node"
+              FAILED=1
+            fi
+            echo ""
+          done
+
+          if [ "$FAILED" = "1" ]; then
+            echo "Some templates are missing!"
+            exit 1
+          fi
+
+          echo "========================================"
+          echo "All templates verified successfully"
+        volumeMounts:
+          - name: ssh-key
+            mountPath: /root/.ssh
