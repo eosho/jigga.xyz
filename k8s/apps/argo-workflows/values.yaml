@@ -83,6 +83,13 @@ controller:
     spec:
       # Use the argo-workflow service account for all workflows
       serviceAccountName: argo-workflow
+      # Default timeout to prevent runaway workflows (1 hour)
+      activeDeadlineSeconds: 3600
+      # Security context - run as non-root for better security
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       # Default TTL for completed workflows
       ttlStrategy:
         secondsAfterCompletion: 86400 # 1 day
