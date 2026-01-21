@@ -95,37 +95,47 @@ All `*.int.jigga.xyz` endpoints require one of:
 | `postgres` | PostgreSQL HA cluster (CloudNativePG) |
 | `vaultwarden` | Vaultwarden password manager |
 | `web` | Homepage |
-| `cronjobs` | Scheduled maintenance tasks |
+| `argo-workflows` | Workflow automation (backups, cleanup tasks) |
 | `kube-system` | Traefik, CoreDNS, MetalLB |
 | `cert-manager` | Certificate management |
 
 ---
 
-## Scheduled Tasks (CronJobs)
+## Scheduled Tasks (Argo Workflows)
 
-The `cronjobs` namespace contains automated maintenance tasks:
+Scheduled maintenance tasks run as Argo CronWorkflows in the `argo-workflows` namespace:
 
-| CronJob | Schedule | Description |
-|---------|----------|-------------|
+| CronWorkflow | Schedule | Description |
+|--------------|----------|-------------|
 | `cleanup-completed-jobs` | Sunday 3:00 UTC | Removes completed/failed pods (>7d), old jobs (>14d), and stale events (>7d) |
 | `cleanup-evicted-pods` | Daily 4:00 UTC | Removes pods evicted due to resource pressure |
+| `postgres-daily-backup` | Daily 2:00 UTC | Full PostgreSQL backup to NFS |
+| `cluster-weekly-health` | Weekly Monday 6:00 UTC | Cluster health check |
 
 ### Manual Execution
 
 ```bash
-# Run cleanup manually
-kubectl create job --from=cronjob/cleanup-completed-jobs cleanup-manual -n cronjobs
-kubectl create job --from=cronjob/cleanup-evicted-pods evicted-cleanup-manual -n cronjobs
+# Run cleanup manually via Argo Workflows UI or CLI
+kubectl -n argo-workflows create -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: manual-cleanup-
+spec:
+  workflowTemplateRef:
+    name: cleanup-completed-jobs
+EOF
 
-# Delete manual jobs after completion
-kubectl delete job cleanup-manual -n cronjobs
-kubectl delete job evicted-cleanup-manual -n cronjobs
+# Or submit from template
+argo -n argo-workflows submit --from=cronwf/cleanup-completed-jobs
 ```
 
 ### View Logs
 
 ```bash
-kubectl logs -n cronjobs -l app.kubernetes.io/component=cleanup --tail=100
+# Via Argo Workflows UI at https://workflows.int.jigga.xyz
+# Or via kubectl
+kubectl -n argo-workflows logs -l workflows.argoproj.io/workflow --tail=100
 ```
 
-> **Note:** Certificate monitoring is handled via PrometheusRules in `k8s/platform/monitoring/alerts/certificate-alerts.yaml`, not CronJobs.
+> **Note:** Certificate monitoring is handled via PrometheusRules in `k8s/platform/monitoring/alerts/certificate-alerts.yaml`.

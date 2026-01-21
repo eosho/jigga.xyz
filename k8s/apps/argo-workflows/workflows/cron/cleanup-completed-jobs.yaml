@@ -1,5 +1,4 @@
 # Cleanup completed/failed pods and old jobs
-# Migrated from k8s/apps/cronjobs
 apiVersion: argoproj.io/v1alpha1
 kind: CronWorkflow
 metadata:

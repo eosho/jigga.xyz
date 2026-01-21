@@ -38,7 +38,7 @@ data:
     reset_database_via_primary() {
       local primary_pod="$1"
       local db="$2"
-      
+
       # Strip quotes if present
       db="${db#\"}"
       db="${db%\"}"
