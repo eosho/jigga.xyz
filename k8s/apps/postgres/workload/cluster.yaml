@@ -72,8 +72,11 @@ spec:
       postInitSQL:
         - CREATE DATABASE gatus OWNER app;
         - CREATE DATABASE vaultwarden OWNER app;
+        - CREATE DATABASE argo_workflows OWNER app;
         - GRANT ALL PRIVILEGES ON DATABASE gatus TO app;
         - GRANT ALL PRIVILEGES ON DATABASE vaultwarden TO app;
+        - GRANT ALL PRIVILEGES ON DATABASE argo_workflows TO app;
+        - GRANT ALL ON SCHEMA public TO app;
 
   # Superuser secret reference
   superuserSecret:
