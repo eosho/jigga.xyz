@@ -35,7 +35,7 @@ data:
             href: https://argocd.int.jigga.xyz
             description: GitOps Deployments
         - Argo Workflows:
-            icon: argocd
+            icon: https://raw.githubusercontent.com/argoproj/argo-workflows/main/docs/assets/argo.png
             href: https://workflows.int.jigga.xyz
             description: Workflow Automation
         - TrueNAS:
