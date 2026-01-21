@@ -37,6 +37,8 @@ spec:
     # Main entrypoint with approval gate
     - name: restore-with-approval
       steps:
+        - - name: fetch-credentials
+            template: get-postgres-password
         - - name: list-backups
             template: list-available-backups
         - - name: resolve-backup
@@ -62,12 +64,31 @@ spec:
                   value: "{{steps.resolve-backup.outputs.parameters.backup-file}}"
                 - name: target-database
                   value: "{{workflow.parameters.target-database}}"
+                - name: pg-password
+                  value: "{{steps.fetch-credentials.outputs.parameters.pg-password}}"
         - - name: verify-restore
             template: verify-databases
             arguments:
               parameters:
                 - name: target-database
                   value: "{{workflow.parameters.target-database}}"
+                - name: pg-password
+                  value: "{{steps.fetch-credentials.outputs.parameters.pg-password}}"
+
+    # Fetch postgres password from postgres namespace
+    - name: get-postgres-password
+      outputs:
+        parameters:
+          - name: pg-password
+            valueFrom:
+              path: /tmp/pg-password.txt
+      container:
+        image: bitnami/kubectl:latest
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            kubectl get secret postgres-cluster-app -n postgres -o jsonpath='{.data.password}' | base64 -d > /tmp/pg-password.txt
+            echo "Password fetched successfully"
 
     # List available backups
     - name: list-available-backups
@@ -181,6 +202,7 @@ spec:
         parameters:
           - name: backup-file
           - name: target-database
+          - name: pg-password
       container:
         image: postgres:18
         command:
@@ -191,6 +213,7 @@ spec:
             BACKUP_FILE="{{inputs.parameters.backup-file}}"
             TARGET_DB="{{inputs.parameters.target-database}}"
             PG_HOST="postgres-cluster-rw.postgres.svc.cluster.local"
+            export POSTGRES_PASSWORD="{{inputs.parameters.pg-password}}"
             
             echo "=== PostgreSQL Restore ==="
             echo "Backup file: $BACKUP_FILE"
@@ -258,12 +281,6 @@ spec:
             echo "=== Restore Summary ==="
             echo "Completed at: $(date)"
             echo "✓ All databases restored successfully"
-        env:
-          - name: POSTGRES_PASSWORD
-            valueFrom:
-              secretKeyRef:
-                name: postgres-cluster-app
-                key: password
         volumeMounts:
           - name: backup
             mountPath: /backup
@@ -280,6 +297,7 @@ spec:
       inputs:
         parameters:
           - name: target-database
+          - name: pg-password
       container:
         image: postgres:18
         command:
@@ -289,6 +307,7 @@ spec:
             set -e
             TARGET_DB="{{inputs.parameters.target-database}}"
             PG_HOST="postgres-cluster-rw.postgres.svc.cluster.local"
+            export POSTGRES_PASSWORD="{{inputs.parameters.pg-password}}"
             
             echo "=== Post-Restore Verification ==="
             echo ""
@@ -311,12 +330,6 @@ spec:
             
             echo ""
             echo "✓ Verification complete"
-        env:
-          - name: POSTGRES_PASSWORD
-            valueFrom:
-              secretKeyRef:
-                name: postgres-cluster-app
-                key: password
         resources:
           requests:
             cpu: 50m
