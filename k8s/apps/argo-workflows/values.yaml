@@ -24,10 +24,9 @@ workflow:
 controller:
   replicas: 2
   
-  # Namespaces where workflows can run
+  # Namespaces where workflows can run (only argo-workflows to avoid conflicts)
   workflowNamespaces:
     - argo-workflows
-    - default
   
   # Resource limits
   resources:
