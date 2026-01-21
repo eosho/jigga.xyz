@@ -53,7 +53,7 @@ spec:
                   value: "{{steps.resolve-backup.outputs.parameters.backup-file}}"
         - - name: approval
             template: manual-approval
-            when: "{{workflow.parameters.skip-approval}} == false"
+            when: "'{{workflow.parameters.skip-approval}}' == 'false'"
         - - name: execute-restore
             template: run-restore
             arguments:
