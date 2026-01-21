@@ -76,7 +76,7 @@ spec:
     # List available backups
     - name: list-available-backups
       container:
-        image: alpine:3.19
+        image: alpine:3.23
         command: ["/bin/sh", "-c"]
         args:
           - |
@@ -100,7 +100,7 @@ spec:
             valueFrom:
               path: /tmp/backup-file.txt
       container:
-        image: alpine:3.19
+        image: alpine:3.23
         command: ["/bin/sh", "-c"]
         args:
           - |
@@ -136,7 +136,7 @@ spec:
         parameters:
           - name: backup-file
       container:
-        image: alpine:3.19
+        image: alpine:3.23
         command: ["/bin/sh", "-c"]
         args:
           - |
