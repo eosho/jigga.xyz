@@ -4,12 +4,11 @@ kind: Role
 metadata:
   name: argo-workflow-postgres-access
   namespace: postgres
-spec:
-  rules:
-    - apiGroups: [""]
-      resources: ["secrets"]
-      resourceNames: ["postgres-cluster-app"]
-      verbs: ["get"]
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["postgres-cluster-app"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -30,14 +29,13 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: argo-workflow-cluster-reader
-spec:
-  rules:
-    - apiGroups: [""]
-      resources: ["nodes", "pods", "persistentvolumeclaims", "namespaces"]
-      verbs: ["get", "list"]
-    - apiGroups: [""]
-      resources: ["pods/log"]
-      verbs: ["get"]
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "pods", "persistentvolumeclaims", "namespaces"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
