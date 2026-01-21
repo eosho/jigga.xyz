@@ -56,14 +56,17 @@ controller:
   # Workflow defaults
   workflowDefaults:
     spec:
+      # Use the argo-workflow service account for all workflows
+      serviceAccountName: argo-workflow
       # Default TTL for completed workflows
       ttlStrategy:
         secondsAfterCompletion: 86400  # 1 day
         secondsAfterSuccess: 43200      # 12 hours
         secondsAfterFailure: 172800     # 2 days
-      # Pod garbage collection
+      # Pod garbage collection - delay deletion to allow log viewing
       podGC:
-        strategy: OnPodCompletion
+        strategy: OnWorkflowSuccess
+        deleteDelayDuration: 300s  # Keep pods for 5 minutes after success
 
 # Argo Server (UI)
 server:
