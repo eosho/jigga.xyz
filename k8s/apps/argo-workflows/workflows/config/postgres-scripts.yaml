@@ -38,9 +38,13 @@ data:
     reset_database_via_primary() {
       local primary_pod="$1"
       local db="$2"
+      
+      # Strip quotes if present
+      db="${db#\"}"
+      db="${db%\"}"
 
       case "$db" in
-        postgres|template0|template1)
+        postgres|template0|template1|"")
           die "Refusing to reset protected database: $db"
           ;;
       esac
@@ -77,9 +81,12 @@ data:
       local backup_file="$3"
 
       log_info "Streaming restore for $db..."
+      # Temporarily disable pipefail since awk exits early when it finds the next DB section,
+      # which causes gunzip to get SIGPIPE (exit 141) - this is expected behavior
+      set +o pipefail
       {
         echo "SET session_replication_role = replica;"
-        gunzip -c "/backup/$backup_file" | awk -v db="$db" '
+        gunzip -c "/backup/$backup_file" 2>/dev/null | awk -v db="$db" '
           $1=="\\connect" {
             name=$2; gsub(/^"|"$/, "", name)
             if(in_db) exit
@@ -94,12 +101,16 @@ data:
         '
         echo "SET session_replication_role = origin;"
       } | kubectl -n "$NAMESPACE" exec -i "$primary_pod" -- psql -U postgres -d "$db" -v ON_ERROR_STOP=0
+      local rc=$?
+      set -o pipefail
+      return $rc
     }
 
     discover_dbs_in_dump() {
       local backup_file="$1"
       gunzip -c "/backup/$backup_file" \
         | sed -n 's/^\\connect[[:space:]]\+\([^ ]*\).*/\1/p' \
+        | sed 's/^"//; s/"$//' \
         | grep -vE '^(template0|template1|postgres)$' \
         | sort -u
     }
