@@ -27,7 +27,7 @@ spec:
 
     - name: node-status
       container:
-        image: bitnami/kubectl:1.31
+        image: bitnami/kubectl:latest
         command: ["/bin/sh", "-c"]
         args:
           - |
@@ -43,7 +43,7 @@ spec:
 
     - name: pod-status
       container:
-        image: bitnami/kubectl:1.31
+        image: bitnami/kubectl:latest
         command: ["/bin/sh", "-c"]
         args:
           - |
@@ -59,7 +59,7 @@ spec:
 
     - name: pvc-status
       container:
-        image: bitnami/kubectl:1.31
+        image: bitnami/kubectl:latest
         command: ["/bin/sh", "-c"]
         args:
           - |
