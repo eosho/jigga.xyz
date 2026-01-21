@@ -1,0 +1,19 @@
+# Weekly Cluster Health Check CronWorkflow
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: cluster-weekly-health
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: cluster-weekly-health
+    app.kubernetes.io/component: cron-workflow
+spec:
+  schedule: "0 6 * * 0"  # 6:00 AM every Sunday
+  timezone: "UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 4
+  failedJobsHistoryLimit: 2
+  
+  workflowSpec:
+    workflowTemplateRef:
+      name: cluster-health-check

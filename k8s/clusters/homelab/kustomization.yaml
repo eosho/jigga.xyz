@@ -14,3 +14,4 @@ resources:
   - apps/cloudnative-pg.yaml
   - apps/postgres.yaml
   - apps/pgadmin.yaml
+  - apps/argo-workflows.yaml

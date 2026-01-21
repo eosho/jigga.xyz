@@ -1,0 +1,85 @@
+# Kubernetes Health Check WorkflowTemplate
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: cluster-health-check
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: cluster-health-check
+    app.kubernetes.io/component: workflow-template
+spec:
+  entrypoint: health-check
+  serviceAccountName: argo-workflow
+  
+  templates:
+    - name: health-check
+      dag:
+        tasks:
+          - name: check-nodes
+            template: node-status
+          - name: check-pods
+            template: pod-status
+          - name: check-pvcs
+            template: pvc-status
+          - name: summary
+            template: generate-summary
+            dependencies: [check-nodes, check-pods, check-pvcs]
+
+    - name: node-status
+      container:
+        image: bitnami/kubectl:1.31
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "=== Node Status ==="
+            kubectl get nodes -o wide
+            echo ""
+            echo "=== Node Conditions ==="
+            kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range .status.conditions[*]}{.type}={.status}{" "}{end}{"\n"}{end}'
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+
+    - name: pod-status
+      container:
+        image: bitnami/kubectl:1.31
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "=== Pods Not Running ==="
+            kubectl get pods -A --field-selector=status.phase!=Running,status.phase!=Succeeded 2>/dev/null || echo "All pods healthy"
+            echo ""
+            echo "=== Recent Restarts (last hour) ==="
+            kubectl get pods -A -o jsonpath='{range .items[*]}{.metadata.namespace}{"\t"}{.metadata.name}{"\t"}{range .status.containerStatuses[*]}{.restartCount}{" "}{end}{"\n"}{end}' 2>/dev/null | awk '$3 > 0 {print}'
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+
+    - name: pvc-status
+      container:
+        image: bitnami/kubectl:1.31
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "=== PVC Status ==="
+            kubectl get pvc -A
+            echo ""
+            echo "=== Pending PVCs ==="
+            kubectl get pvc -A --field-selector=status.phase=Pending 2>/dev/null || echo "No pending PVCs"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+
+    - name: generate-summary
+      container:
+        image: alpine:3.19
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "==========================================="
+            echo "  Cluster Health Check Complete"
+            echo "  Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo "==========================================="

@@ -1,0 +1,112 @@
+# Argo Workflows Helm Values
+# Chart: argo-workflows v0.47.0
+# App: v3.7.7
+
+# Global image settings
+images:
+  tag: v3.7.7
+  pullPolicy: IfNotPresent
+
+# CRD installation
+crds:
+  install: true
+  keep: true
+
+# Workflow service account for running workflows
+workflow:
+  serviceAccount:
+    create: true
+    name: argo-workflow
+  rbac:
+    create: true
+
+# Workflow Controller
+controller:
+  replicas: 2
+  
+  # Namespaces where workflows can run
+  workflowNamespaces:
+    - argo-workflows
+    - default
+  
+  # Resource limits
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  
+  # Metrics for Prometheus
+  metricsConfig:
+    enabled: true
+    port: 9090
+    servicePort: 8080
+  
+  # Pod disruption budget for HA
+  pdb:
+    enabled: true
+    minAvailable: 1
+  
+  # Logging
+  logging:
+    level: info
+    format: json
+  
+  # Workflow defaults
+  workflowDefaults:
+    spec:
+      # Default TTL for completed workflows
+      ttlStrategy:
+        secondsAfterCompletion: 86400  # 1 day
+        secondsAfterSuccess: 43200      # 12 hours
+        secondsAfterFailure: 172800     # 2 days
+      # Pod garbage collection
+      podGC:
+        strategy: OnPodCompletion
+
+# Argo Server (UI)
+server:
+  replicas: 2
+  
+  # Authentication mode - server mode for basic auth
+  authModes:
+    - server
+  
+  # Resource limits
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  
+  # Pod disruption budget
+  pdb:
+    enabled: true
+    minAvailable: 1
+  
+  # Ingress (disabled - using separate ingress resource)
+  ingress:
+    enabled: false
+  
+  # Logging
+  logging:
+    level: info
+    format: json
+
+# Executor settings for workflow pods
+executor:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+# Artifact Repository - use emptyDir for now (can configure S3/GCS later)
+artifactRepository:
+  archiveLogs: true

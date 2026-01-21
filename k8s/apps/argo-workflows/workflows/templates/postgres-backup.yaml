@@ -1,0 +1,76 @@
+# Postgres Backup WorkflowTemplate
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: postgres-backup
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: postgres-backup
+    app.kubernetes.io/component: workflow-template
+spec:
+  entrypoint: backup-all-databases
+  serviceAccountName: argo-workflow
+  arguments:
+    parameters:
+      - name: databases
+        value: "gatus,vaultwarden"
+      - name: pg-host
+        value: "postgres-cluster-rw.postgres.svc.cluster.local"
+      - name: backup-path
+        value: "/backups"
+  
+  templates:
+    - name: backup-all-databases
+      steps:
+        - - name: backup-db
+            template: pg-dump
+            arguments:
+              parameters:
+                - name: database
+                  value: "{{item}}"
+            withParam: "{{workflow.parameters.databases | split(\",\")}}"
+        - - name: notify
+            template: log-completion
+
+    - name: pg-dump
+      inputs:
+        parameters:
+          - name: database
+      container:
+        image: postgres:18-alpine
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            set -e
+            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+            DB_NAME="{{inputs.parameters.database}}"
+            BACKUP_FILE="${DB_NAME}-${TIMESTAMP}.sql.gz"
+            
+            echo "Starting backup of ${DB_NAME}..."
+            pg_dump -h {{workflow.parameters.pg-host}} -U app -d ${DB_NAME} | gzip > /tmp/${BACKUP_FILE}
+            
+            echo "Backup complete: ${BACKUP_FILE}"
+            ls -lh /tmp/${BACKUP_FILE}
+        env:
+          - name: PGPASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: postgres-cluster-app
+                key: password
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+    - name: log-completion
+      container:
+        image: alpine:3.19
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "==================================="
+            echo "Backup workflow completed at $(date)"
+            echo "==================================="

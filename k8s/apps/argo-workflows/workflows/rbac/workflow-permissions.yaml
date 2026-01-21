@@ -1,0 +1,53 @@
+# RBAC for Argo Workflows to access Postgres secrets
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: argo-workflow-postgres-access
+  namespace: postgres
+spec:
+  rules:
+    - apiGroups: [""]
+      resources: ["secrets"]
+      resourceNames: ["postgres-cluster-app"]
+      verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: argo-workflow-postgres-access
+  namespace: postgres
+subjects:
+  - kind: ServiceAccount
+    name: argo-workflow
+    namespace: argo-workflows
+roleRef:
+  kind: Role
+  name: argo-workflow-postgres-access
+  apiGroup: rbac.authorization.k8s.io
+---
+# ClusterRole for cluster-wide read access (health checks)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: argo-workflow-cluster-reader
+spec:
+  rules:
+    - apiGroups: [""]
+      resources: ["nodes", "pods", "persistentvolumeclaims", "namespaces"]
+      verbs: ["get", "list"]
+    - apiGroups: [""]
+      resources: ["pods/log"]
+      verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: argo-workflow-cluster-reader
+subjects:
+  - kind: ServiceAccount
+    name: argo-workflow
+    namespace: argo-workflows
+roleRef:
+  kind: ClusterRole
+  name: argo-workflow-cluster-reader
+  apiGroup: rbac.authorization.k8s.io

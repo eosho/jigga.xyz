@@ -1,0 +1,69 @@
+# Hello World WorkflowTemplate - For Testing
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: hello-world
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: hello-world
+    app.kubernetes.io/component: workflow-template
+spec:
+  entrypoint: main
+  serviceAccountName: argo-workflow
+  arguments:
+    parameters:
+      - name: message
+        value: "Hello from Argo Workflows!"
+  
+  templates:
+    - name: main
+      steps:
+        - - name: greet
+            template: echo-message
+        - - name: info
+            template: cluster-info
+
+    - name: echo-message
+      container:
+        image: alpine:3.19
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "==============================="
+            echo "{{workflow.parameters.message}}"
+            echo "==============================="
+            echo "Workflow: {{workflow.name}}"
+            echo "Namespace: {{workflow.namespace}}"
+            echo "Started: {{workflow.creationTimestamp}}"
+            echo "Node: ${NODE_NAME:-unknown}"
+        env:
+          - name: NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
+
+    - name: cluster-info
+      container:
+        image: bitnami/kubectl:1.31
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "Cluster Info:"
+            kubectl cluster-info 2>/dev/null || echo "No cluster access"
+            echo ""
+            echo "Current namespace pods:"
+            kubectl get pods -n argo-workflows --no-headers 2>/dev/null | head -5 || echo "No access"
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi

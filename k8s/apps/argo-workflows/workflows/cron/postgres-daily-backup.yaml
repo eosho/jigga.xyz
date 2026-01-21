@@ -1,0 +1,23 @@
+# Daily Postgres Backup CronWorkflow
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: postgres-daily-backup
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: postgres-daily-backup
+    app.kubernetes.io/component: cron-workflow
+spec:
+  schedule: "0 2 * * *"  # 2:00 AM daily
+  timezone: "UTC"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 3
+  
+  workflowSpec:
+    workflowTemplateRef:
+      name: postgres-backup
+    arguments:
+      parameters:
+        - name: databases
+          value: "gatus,vaultwarden"
