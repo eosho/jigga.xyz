@@ -21,9 +21,6 @@ spec:
             template: pod-status
           - name: check-pvcs
             template: pvc-status
-          - name: summary
-            template: generate-summary
-            dependencies: [check-nodes, check-pods, check-pvcs]
 
     - name: node-status
       container:

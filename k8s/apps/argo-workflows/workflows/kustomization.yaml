@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
   # Config
   - config/postgres-scripts.yaml
+  - config/proxmox-scripts.yaml
 
   # WorkflowTemplates
   - templates/hello-world.yaml
