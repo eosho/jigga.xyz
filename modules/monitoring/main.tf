@@ -270,7 +270,7 @@ chunksCache:
 resultsCache:
   enabled: false
 
-# Keep canary enabled for helm test validation  
+# Keep canary enabled for helm test validation
 lokiCanary:
   enabled: true
 
