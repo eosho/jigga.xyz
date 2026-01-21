@@ -299,16 +299,24 @@ resource "helm_release" "alloy" {
   values = [<<EOF
 alloy:
   configMap:
+    create: true
     content: |
-      // Discover pods and collect logs
+      logging {
+        level  = "info"
+        format = "logfmt"
+      }
+
+      // Discover all pods in the cluster
       discovery.kubernetes "pods" {
         role = "pod"
       }
 
-      // Relabel discovered pods with labels for Argo Workflows
+      // Relabel discovered pods - add namespace, pod, container labels
+      // and Argo Workflow specific labels for log correlation
       discovery.relabel "pods" {
         targets = discovery.kubernetes.pods.targets
 
+        // Basic Kubernetes labels
         rule {
           source_labels = ["__meta_kubernetes_namespace"]
           target_label  = "namespace"
@@ -323,9 +331,18 @@ alloy:
         }
         rule {
           source_labels = ["__meta_kubernetes_pod_node_name"]
-          target_label  = "node"
+          target_label  = "node_name"
         }
-        // Argo Workflows labels for log querying
+        // App label for general filtering
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          target_label  = "app"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+          target_label  = "app"
+        }
+        // Argo Workflows labels for log querying from UI
         rule {
           source_labels = ["__meta_kubernetes_pod_label_workflows_argoproj_io_workflow"]
           target_label  = "workflow"
@@ -336,11 +353,11 @@ alloy:
         }
         rule {
           source_labels = ["__meta_kubernetes_pod_annotation_workflows_argoproj_io_node_name"]
-          target_label  = "node_name"
+          target_label  = "argo_node_name"
         }
       }
 
-      // Collect logs from pods
+      // Collect logs from discovered pods
       loki.source.kubernetes "pods" {
         targets    = discovery.relabel.pods.output
         forward_to = [loki.write.default.receiver]
@@ -352,17 +369,19 @@ alloy:
           url = "http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push"
         }
       }
+  mounts:
+    varlog: true
+    dockercontainers: true
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
 
 controller:
   type: daemonset
-
-resources:
-  requests:
-    cpu: 10m
-    memory: 64Mi
-  limits:
-    cpu: 200m
-    memory: 256Mi
 EOF
   ]
 }

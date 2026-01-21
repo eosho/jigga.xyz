@@ -48,10 +48,10 @@ controller:
   links:
     - name: Workflow Logs
       scope: workflow
-      url: "https://grafana.jigga.xyz/explore?orgId=1&left=%7B%22datasource%22:%22loki%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bnamespace%3D%5C%22argo-workflows%5C%22,%20workflow%3D%5C%22${metadata.name}%5C%22%7D%22%7D%5D,%22range%22:%7B%22from%22:%22${status.startedAtEpoch}%22,%22to%22:%22${status.finishedAtEpoch}%22%7D%7D"
+      url: "https://grafana.int.jigga.xyz/explore?orgId=1&left=%7B%22datasource%22:%22loki%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bnamespace%3D%5C%22argo-workflows%5C%22,%20workflow%3D%5C%22${metadata.name}%5C%22%7D%22%7D%5D,%22range%22:%7B%22from%22:%22${status.startedAtEpoch}%22,%22to%22:%22${status.finishedAtEpoch}%22%7D%7D"
     - name: Pod Logs
       scope: pod-logs
-      url: "https://grafana.jigga.xyz/explore?orgId=1&left=%7B%22datasource%22:%22loki%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bnamespace%3D%5C%22argo-workflows%5C%22,%20pod%3D%5C%22${metadata.name}%5C%22%7D%22%7D%5D,%22range%22:%7B%22from%22:%22${status.startedAtEpoch}%22,%22to%22:%22${status.finishedAtEpoch}%22%7D%7D"
+      url: "https://grafana.int.jigga.xyz/explore?orgId=1&left=%7B%22datasource%22:%22loki%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22%7Bnamespace%3D%5C%22argo-workflows%5C%22,%20pod%3D%5C%22${metadata.name}%5C%22%7D%22%7D%5D,%22range%22:%7B%22from%22:%22${status.startedAtEpoch}%22,%22to%22:%22${status.finishedAtEpoch}%22%7D%7D"
 
   # Resource limits
   resources:
