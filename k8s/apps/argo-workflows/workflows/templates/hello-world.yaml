@@ -14,7 +14,7 @@ spec:
     parameters:
       - name: message
         value: "Hello from Argo Workflows!"
-  
+
   templates:
     - name: main
       steps:
@@ -29,13 +29,7 @@ spec:
         command: ["/bin/sh", "-c"]
         args:
           - |
-            echo "==============================="
-            echo "{{workflow.parameters.message}}"
-            echo "==============================="
-            echo "Workflow: {{workflow.name}}"
-            echo "Namespace: {{workflow.namespace}}"
-            echo "Started: {{workflow.creationTimestamp}}"
-            echo "Node: ${NODE_NAME:-unknown}"
+            echo "hello world"
         env:
           - name: NODE_NAME
             valueFrom:
@@ -48,22 +42,3 @@ spec:
           limits:
             cpu: 100m
             memory: 64Mi
-
-    - name: cluster-info
-      container:
-        image: bitnami/kubectl:latest
-        command: ["/bin/sh", "-c"]
-        args:
-          - |
-            echo "Cluster Info:"
-            kubectl cluster-info 2>/dev/null || echo "No cluster access"
-            echo ""
-            echo "Current namespace pods:"
-            kubectl get pods -n argo-workflows --no-headers 2>/dev/null | head -5 || echo "No access"
-        resources:
-          requests:
-            cpu: 10m
-            memory: 32Mi
-          limits:
-            cpu: 100m
-            memory: 128Mi
