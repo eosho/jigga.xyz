@@ -5,11 +5,14 @@ resources:
   # WorkflowTemplates
   - templates/hello-world.yaml
   - templates/postgres-backup.yaml
+  - templates/postgres-restore.yaml
   - templates/cluster-health-check.yaml
-  
+
   # CronWorkflows
   - cron/postgres-daily-backup.yaml
   - cron/cluster-weekly-health.yaml
-  
+  - cron/cleanup-completed-jobs.yaml
+  - cron/cleanup-evicted-pods.yaml
+
   # RBAC
   - rbac/workflow-permissions.yaml

@@ -1,0 +1,64 @@
+# Cleanup evicted pods
+# Migrated from k8s/apps/cronjobs
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: cleanup-evicted-pods
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: argo-workflows
+    app.kubernetes.io/component: cleanup
+spec:
+  # Run daily at 4:00 AM UTC
+  schedule: "0 4 * * *"
+  timezone: "UTC"
+  concurrencyPolicy: "Forbid"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  startingDeadlineSeconds: 300
+
+  workflowSpec:
+    entrypoint: cleanup-evicted
+    serviceAccountName: argo-workflow
+
+    templates:
+      - name: cleanup-evicted
+        container:
+          image: bitnami/kubectl:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "=== Evicted Pod Cleanup ==="
+              echo "Date: $(date -u)"
+              echo ""
+
+              # Find and delete evicted pods
+              EVICTED=$(kubectl get pods -A -o json | \
+                jq -r '.items[] | select(.status.reason=="Evicted") | "\(.metadata.namespace) \(.metadata.name)"' 2>/dev/null || echo "")
+
+              if [ -n "$EVICTED" ]; then
+                COUNT=$(echo "$EVICTED" | grep -c . || echo 0)
+                echo "Found $COUNT evicted pods to clean up:"
+                echo ""
+
+                echo "$EVICTED" | while read ns name; do
+                  if [ -n "$ns" ] && [ -n "$name" ]; then
+                    echo "Deleting evicted pod: $ns/$name"
+                    kubectl delete pod -n "$ns" "$name" --ignore-not-found=true
+                  fi
+                done
+              else
+                echo "No evicted pods found."
+              fi
+
+              echo ""
+              echo "Cleanup completed successfully."
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

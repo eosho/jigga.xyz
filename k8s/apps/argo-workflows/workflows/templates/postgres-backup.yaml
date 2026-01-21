@@ -8,59 +8,71 @@ metadata:
     app.kubernetes.io/name: postgres-backup
     app.kubernetes.io/component: workflow-template
 spec:
-  entrypoint: backup-all-databases
+  entrypoint: backup-cluster
   serviceAccountName: argo-workflow
-  arguments:
-    parameters:
-      - name: databases
-        value: "gatus,vaultwarden"
-      - name: pg-host
-        value: "postgres-cluster-rw.postgres.svc.cluster.local"
-      - name: backup-path
-        value: "/backups"
-  
+
+  # NFS volume for backup storage (same as postgres namespace PVC)
+  volumes:
+    - name: backup
+      nfs:
+        server: 192.168.1.246
+        path: /mnt/truenas-pool/pve/k8s/postgres
+
   templates:
-    - name: backup-all-databases
+    - name: backup-cluster
       steps:
-        - - name: backup-db
-            template: pg-dump
-            arguments:
-              parameters:
-                - name: database
-                  value: "{{item}}"
-            withParam: "{{workflow.parameters.databases | split(\",\")}}"
+        - - name: run-backup
+            template: pg-dumpall
         - - name: notify
             template: log-completion
 
-    - name: pg-dump
-      inputs:
-        parameters:
-          - name: database
+    - name: pg-dumpall
       container:
-        image: postgres:18-alpine
-        command: ["/bin/sh", "-c"]
-        args:
+        image: postgres:18
+        command:
+          - /bin/bash
+          - -c
           - |
             set -e
-            TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-            DB_NAME="{{inputs.parameters.database}}"
-            BACKUP_FILE="${DB_NAME}-${TIMESTAMP}.sql.gz"
-            
-            echo "Starting backup of ${DB_NAME}..."
-            pg_dump -h {{workflow.parameters.pg-host}} -U app -d ${DB_NAME} | gzip > /tmp/${BACKUP_FILE}
-            
-            echo "Backup complete: ${BACKUP_FILE}"
-            ls -lh /tmp/${BACKUP_FILE}
+            BACKUP_FILE="/backup/postgres-backup-$(date +%Y%m%d-%H%M%S).sql.gz"
+            echo "Starting backup to $BACKUP_FILE"
+
+            # Run pg_dumpall using app user (CloudNativePG disables password auth for postgres user)
+            # Note: --no-role-passwords because app user can't dump password hashes
+            PGPASSWORD="$POSTGRES_PASSWORD" pg_dumpall \
+              -h postgres-cluster-rw.postgres.svc.cluster.local \
+              -U app \
+              --no-role-passwords \
+              --clean \
+              --if-exists | gzip > "$BACKUP_FILE"
+
+            # Verify backup
+            if [ -s "$BACKUP_FILE" ]; then
+              SIZE=$(ls -lh "$BACKUP_FILE" | awk '{print $5}')
+              echo "Backup completed successfully: $BACKUP_FILE ($SIZE)"
+
+              # Cleanup old backups (keep last 7)
+              cd /backup
+              ls -t postgres-backup-*.sql.gz 2>/dev/null | tail -n +8 | xargs -r rm -f
+              echo "Cleanup completed. Current backups:"
+              ls -lh /backup/postgres-backup-*.sql.gz
+            else
+              echo "ERROR: Backup file is empty!"
+              exit 1
+            fi
         env:
-          - name: PGPASSWORD
+          - name: POSTGRES_PASSWORD
             valueFrom:
               secretKeyRef:
                 name: postgres-cluster-app
                 key: password
+        volumeMounts:
+          - name: backup
+            mountPath: /backup
         resources:
           requests:
             cpu: 100m
-            memory: 128Mi
+            memory: 256Mi
           limits:
             cpu: 500m
             memory: 512Mi

@@ -10,7 +10,7 @@ metadata:
 spec:
   entrypoint: health-check
   serviceAccountName: argo-workflow
-  
+
   templates:
     - name: health-check
       dag:
@@ -72,14 +72,3 @@ spec:
           requests:
             cpu: 10m
             memory: 32Mi
-
-    - name: generate-summary
-      container:
-        image: alpine:3.19
-        command: ["/bin/sh", "-c"]
-        args:
-          - |
-            echo "==========================================="
-            echo "  Cluster Health Check Complete"
-            echo "  Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-            echo "==========================================="

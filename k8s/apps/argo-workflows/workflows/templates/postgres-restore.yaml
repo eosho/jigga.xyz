@@ -1,0 +1,326 @@
+# Postgres Restore WorkflowTemplate
+# Supports full cluster restore or single database restore
+# Based on scripts/postgres-restore.sh
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: postgres-restore
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: postgres-restore
+    app.kubernetes.io/component: workflow-template
+spec:
+  entrypoint: restore-with-approval
+  serviceAccountName: argo-workflow
+
+  # Input parameters
+  arguments:
+    parameters:
+      - name: backup-file
+        description: "Backup file name (e.g., postgres-backup-20260120-020000.sql.gz) or 'latest'"
+        value: "latest"
+      - name: target-database
+        description: "Single database to restore (leave empty for full restore)"
+        value: ""
+      - name: skip-approval
+        description: "Skip manual approval step (use with caution)"
+        value: "false"
+
+  # NFS volume for backup storage
+  volumes:
+    - name: backup
+      nfs:
+        server: 192.168.1.246
+        path: /mnt/truenas-pool/pve/k8s/postgres
+
+  templates:
+    # Main entrypoint with approval gate
+    - name: restore-with-approval
+      steps:
+        - - name: list-backups
+            template: list-available-backups
+        - - name: resolve-backup
+            template: resolve-backup-file
+            arguments:
+              parameters:
+                - name: requested-file
+                  value: "{{workflow.parameters.backup-file}}"
+        - - name: verify-backup
+            template: verify-backup-contents
+            arguments:
+              parameters:
+                - name: backup-file
+                  value: "{{steps.resolve-backup.outputs.parameters.backup-file}}"
+        - - name: approval
+            template: manual-approval
+            when: "{{workflow.parameters.skip-approval}} == false"
+        - - name: execute-restore
+            template: run-restore
+            arguments:
+              parameters:
+                - name: backup-file
+                  value: "{{steps.resolve-backup.outputs.parameters.backup-file}}"
+                - name: target-database
+                  value: "{{workflow.parameters.target-database}}"
+        - - name: verify-restore
+            template: verify-databases
+            arguments:
+              parameters:
+                - name: target-database
+                  value: "{{workflow.parameters.target-database}}"
+
+    # List available backups
+    - name: list-available-backups
+      container:
+        image: alpine:3.19
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "=== Available Backups ==="
+            echo ""
+            ls -lht /backup/postgres-backup-*.sql.gz 2>/dev/null | head -20 || echo "No backups found"
+            echo ""
+            echo "Total backups: $(ls /backup/postgres-backup-*.sql.gz 2>/dev/null | wc -l)"
+        volumeMounts:
+          - name: backup
+            mountPath: /backup
+
+    # Resolve 'latest' to actual filename
+    - name: resolve-backup-file
+      inputs:
+        parameters:
+          - name: requested-file
+      outputs:
+        parameters:
+          - name: backup-file
+            valueFrom:
+              path: /tmp/backup-file.txt
+      container:
+        image: alpine:3.19
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            set -e
+            REQUESTED="{{inputs.parameters.requested-file}}"
+            
+            if [ "$REQUESTED" = "latest" ]; then
+              BACKUP_FILE=$(ls -t /backup/postgres-backup-*.sql.gz 2>/dev/null | head -1 | xargs basename)
+              if [ -z "$BACKUP_FILE" ]; then
+                echo "ERROR: No backups found on NFS"
+                exit 1
+              fi
+              echo "Resolved 'latest' to: $BACKUP_FILE"
+            else
+              BACKUP_FILE="$REQUESTED"
+              if [ ! -f "/backup/$BACKUP_FILE" ]; then
+                echo "ERROR: Backup file not found: $BACKUP_FILE"
+                echo "Available backups:"
+                ls /backup/postgres-backup-*.sql.gz 2>/dev/null || echo "None"
+                exit 1
+              fi
+            fi
+            
+            echo "$BACKUP_FILE" > /tmp/backup-file.txt
+            echo "Using backup file: $BACKUP_FILE"
+        volumeMounts:
+          - name: backup
+            mountPath: /backup
+
+    # Verify backup contents
+    - name: verify-backup-contents
+      inputs:
+        parameters:
+          - name: backup-file
+      container:
+        image: alpine:3.19
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            set -e
+            BACKUP_FILE="{{inputs.parameters.backup-file}}"
+            
+            echo "=== Verifying Backup: $BACKUP_FILE ==="
+            echo ""
+            
+            # File info
+            echo "File details:"
+            ls -lh "/backup/$BACKUP_FILE"
+            echo ""
+            
+            # Check it's valid gzip
+            echo "Validating gzip integrity..."
+            gunzip -t "/backup/$BACKUP_FILE" && echo "✓ Gzip file is valid"
+            echo ""
+            
+            # Show databases in backup
+            echo "Databases in backup:"
+            gunzip -c "/backup/$BACKUP_FILE" | grep -E '^\\connect ' | grep -v 'template0\|template1\|postgres' | sort -u || echo "None found"
+            echo ""
+            
+            # Show backup header
+            echo "Backup header (first 20 lines):"
+            gunzip -c "/backup/$BACKUP_FILE" | head -20
+        volumeMounts:
+          - name: backup
+            mountPath: /backup
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+
+    # Manual approval gate
+    - name: manual-approval
+      suspend: {}
+
+    # Execute the restore
+    - name: run-restore
+      inputs:
+        parameters:
+          - name: backup-file
+          - name: target-database
+      container:
+        image: postgres:18
+        command:
+          - /bin/bash
+          - -c
+          - |
+            set -e
+            BACKUP_FILE="{{inputs.parameters.backup-file}}"
+            TARGET_DB="{{inputs.parameters.target-database}}"
+            PG_HOST="postgres-cluster-rw.postgres.svc.cluster.local"
+            
+            echo "=== PostgreSQL Restore ==="
+            echo "Backup file: $BACKUP_FILE"
+            echo "Target database: ${TARGET_DB:-ALL}"
+            echo "Started at: $(date)"
+            echo ""
+            
+            # Function to restore a single database
+            restore_database() {
+              local db="$1"
+              echo "--- Restoring database: $db ---"
+              
+              # Drop and recreate database
+              echo "Dropping existing database..."
+              PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$PG_HOST" -U app -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname='$db' AND pid <> pg_backend_pid();" 2>/dev/null || true
+              PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$PG_HOST" -U app -d postgres -c "DROP DATABASE IF EXISTS \"$db\";"
+              PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$PG_HOST" -U app -d postgres -c "CREATE DATABASE \"$db\";"
+              
+              # Extract and restore database section from pg_dumpall
+              echo "Restoring data..."
+              {
+                echo "SET session_replication_role = replica;"
+                gunzip -c "/backup/$BACKUP_FILE" | awk -v db="$db" '
+                  $1=="\\connect" {
+                    name=$2; gsub(/^"|"$/, "", name)
+                    if(in_db) exit
+                    if(name==db){ in_db=1; next }
+                  }
+                  in_db {
+                    if($1=="CREATE" && $2=="DATABASE") exit
+                    if($1=="ALTER" && $2=="DATABASE") exit
+                    if($1=="COMMENT" && $2=="ON" && $3=="DATABASE") exit
+                    print
+                  }
+                '
+                echo "SET session_replication_role = origin;"
+              } | PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$PG_HOST" -U app -d "$db" -v ON_ERROR_STOP=0
+              
+              echo "✓ Database $db restored"
+              echo ""
+            }
+            
+            if [ -n "$TARGET_DB" ]; then
+              # Single database restore
+              restore_database "$TARGET_DB"
+            else
+              # Full restore - discover all databases
+              echo "Discovering databases in backup..."
+              DATABASES=$(gunzip -c "/backup/$BACKUP_FILE" | sed -n 's/^\\connect[[:space:]]\+\([^ ]*\).*/\1/p' | grep -vE '^(template0|template1|postgres)$' | sort -u)
+              
+              if [ -z "$DATABASES" ]; then
+                echo "ERROR: No databases found in backup"
+                exit 1
+              fi
+              
+              echo "Databases to restore:"
+              echo "$DATABASES" | sed 's/^/  - /'
+              echo ""
+              
+              for db in $DATABASES; do
+                restore_database "$db"
+              done
+            fi
+            
+            echo "=== Restore Summary ==="
+            echo "Completed at: $(date)"
+            echo "✓ All databases restored successfully"
+        env:
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: postgres-cluster-app
+                key: password
+        volumeMounts:
+          - name: backup
+            mountPath: /backup
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+    # Verify databases after restore
+    - name: verify-databases
+      inputs:
+        parameters:
+          - name: target-database
+      container:
+        image: postgres:18
+        command:
+          - /bin/bash
+          - -c
+          - |
+            set -e
+            TARGET_DB="{{inputs.parameters.target-database}}"
+            PG_HOST="postgres-cluster-rw.postgres.svc.cluster.local"
+            
+            echo "=== Post-Restore Verification ==="
+            echo ""
+            
+            if [ -n "$TARGET_DB" ]; then
+              # Verify single database
+              echo "Verifying database: $TARGET_DB"
+              PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$PG_HOST" -U app -d "$TARGET_DB" -c "\dt" || echo "No tables found"
+              echo ""
+              PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$PG_HOST" -U app -d "$TARGET_DB" -c "SELECT count(*) as table_count FROM information_schema.tables WHERE table_schema = 'public';"
+            else
+              # List all databases
+              echo "All databases:"
+              PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$PG_HOST" -U app -d postgres -c "\l"
+              
+              echo ""
+              echo "Database sizes:"
+              PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$PG_HOST" -U app -d postgres -c "SELECT datname, pg_size_pretty(pg_database_size(datname)) as size FROM pg_database WHERE datname NOT IN ('template0', 'template1') ORDER BY pg_database_size(datname) DESC;"
+            fi
+            
+            echo ""
+            echo "✓ Verification complete"
+        env:
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: postgres-cluster-app
+                key: password
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi

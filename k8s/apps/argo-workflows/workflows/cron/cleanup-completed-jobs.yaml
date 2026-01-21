@@ -1,0 +1,120 @@
+# Cleanup completed/failed pods and old jobs
+# Migrated from k8s/apps/cronjobs
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: cleanup-completed-jobs
+  namespace: argo-workflows
+  labels:
+    app.kubernetes.io/name: argo-workflows
+    app.kubernetes.io/component: cleanup
+spec:
+  # Run every Sunday at 3:00 AM UTC
+  schedule: "0 3 * * 0"
+  timezone: "UTC"
+  concurrencyPolicy: "Forbid"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  startingDeadlineSeconds: 300
+
+  workflowSpec:
+    entrypoint: cleanup-resources
+    serviceAccountName: argo-workflow
+
+    templates:
+      - name: cleanup-resources
+        steps:
+          - - name: cleanup-pods-jobs
+              template: run-cleanup
+
+      - name: run-cleanup
+        container:
+          image: bitnami/kubectl:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "=== Kubernetes Resource Cleanup ==="
+              echo "Date: $(date -u)"
+              echo ""
+
+              # 1. Delete completed pods older than 7 days
+              echo "--- Cleaning up completed pods (older than 7 days) ---"
+              COMPLETED_PODS=$(kubectl get pods -A --field-selector=status.phase==Succeeded -o json | \
+                jq -r '.items[] | select((now - (.status.startTime | fromdateiso8601)) > 604800) | "\(.metadata.namespace) \(.metadata.name)"' 2>/dev/null || echo "")
+
+              if [ -n "$COMPLETED_PODS" ]; then
+                echo "$COMPLETED_PODS" | while read ns name; do
+                  if [ -n "$ns" ] && [ -n "$name" ]; then
+                    echo "Deleting completed pod: $ns/$name"
+                    kubectl delete pod -n "$ns" "$name" --ignore-not-found=true
+                  fi
+                done
+              else
+                echo "No completed pods to clean up."
+              fi
+              echo ""
+
+              # 2. Delete failed pods older than 3 days
+              echo "--- Cleaning up failed pods (older than 3 days) ---"
+              FAILED_PODS=$(kubectl get pods -A --field-selector=status.phase==Failed -o json | \
+                jq -r '.items[] | select((now - (.status.startTime | fromdateiso8601)) > 259200) | "\(.metadata.namespace) \(.metadata.name)"' 2>/dev/null || echo "")
+
+              if [ -n "$FAILED_PODS" ]; then
+                echo "$FAILED_PODS" | while read ns name; do
+                  if [ -n "$ns" ] && [ -n "$name" ]; then
+                    echo "Deleting failed pod: $ns/$name"
+                    kubectl delete pod -n "$ns" "$name" --ignore-not-found=true
+                  fi
+                done
+              else
+                echo "No failed pods to clean up."
+              fi
+              echo ""
+
+              # 3. Delete completed jobs older than 14 days (that don't have TTL set)
+              echo "--- Cleaning up old completed jobs (older than 14 days) ---"
+              OLD_JOBS=$(kubectl get jobs -A -o json | \
+                jq -r '.items[] | select(.status.succeeded == 1) | select((now - (.status.completionTime | fromdateiso8601)) > 1209600) | "\(.metadata.namespace) \(.metadata.name)"' 2>/dev/null || echo "")
+
+              if [ -n "$OLD_JOBS" ]; then
+                echo "$OLD_JOBS" | while read ns name; do
+                  if [ -n "$ns" ] && [ -n "$name" ]; then
+                    echo "Deleting old job: $ns/$name"
+                    kubectl delete job -n "$ns" "$name" --ignore-not-found=true
+                  fi
+                done
+              else
+                echo "No old completed jobs to clean up."
+              fi
+              echo ""
+
+              # 4. Delete old events (older than 7 days)
+              echo "--- Cleaning up old events (older than 7 days) ---"
+              OLD_EVENTS=$(kubectl get events -A -o json | \
+                jq -r '.items[] | select((now - (.lastTimestamp | fromdateiso8601)) > 604800) | "\(.metadata.namespace) \(.metadata.name)"' 2>/dev/null || echo "")
+
+              EVENT_COUNT=0
+              if [ -n "$OLD_EVENTS" ]; then
+                EVENT_COUNT=$(echo "$OLD_EVENTS" | grep -c . || echo 0)
+              fi
+              echo "Found $EVENT_COUNT old events to clean up."
+
+              if [ "$EVENT_COUNT" -gt 0 ] && [ "$EVENT_COUNT" -lt 1000 ]; then
+                echo "$OLD_EVENTS" | head -100 | while read ns name; do
+                  kubectl delete event -n "$ns" "$name" --ignore-not-found=true 2>/dev/null || true
+                done
+                echo "Cleaned up events (limited to first 100)."
+              fi
+              echo ""
+
+              echo "=== Cleanup Summary ==="
+              echo "Cleanup completed successfully at $(date -u)"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

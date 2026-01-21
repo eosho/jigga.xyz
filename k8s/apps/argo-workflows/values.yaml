@@ -23,11 +23,11 @@ workflow:
 # Workflow Controller
 controller:
   replicas: 2
-  
+
   # Namespaces where workflows can run (only argo-workflows to avoid conflicts)
   workflowNamespaces:
     - argo-workflows
-  
+
   # Resource limits
   resources:
     requests:
@@ -36,23 +36,23 @@ controller:
     limits:
       cpu: 500m
       memory: 512Mi
-  
+
   # Metrics for Prometheus
   metricsConfig:
     enabled: true
     port: 9090
     servicePort: 8080
-  
+
   # Pod disruption budget for HA
   pdb:
     enabled: true
     minAvailable: 1
-  
+
   # Logging
   logging:
     level: info
     format: json
-  
+
   # Workflow defaults
   workflowDefaults:
     spec:
@@ -71,11 +71,11 @@ controller:
 # Argo Server (UI)
 server:
   replicas: 2
-  
+
   # Authentication mode - server mode for basic auth
   authModes:
     - server
-  
+
   # Resource limits
   resources:
     requests:
@@ -84,16 +84,16 @@ server:
     limits:
       cpu: 200m
       memory: 256Mi
-  
+
   # Pod disruption budget
   pdb:
     enabled: true
     minAvailable: 1
-  
+
   # Ingress (disabled - using separate ingress resource)
   ingress:
     enabled: false
-  
+
   # Logging
   logging:
     level: info

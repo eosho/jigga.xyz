@@ -13,7 +13,7 @@ spec:
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 4
   failedJobsHistoryLimit: 2
-  
+
   workflowSpec:
     workflowTemplateRef:
       name: cluster-health-check
