@@ -100,7 +100,7 @@ spec:
     # =========================================================================
     - name: validate-parameters
       script:
-        image: alpine:3.19
+        image: alpine:3.23
         command: [sh]
         source: |
           set -e
@@ -138,7 +138,7 @@ spec:
             valueFrom:
               path: /tmp/codename.txt
       script:
-        image: alpine:3.19
+        image: alpine:3.23
         command: [sh]
         source: |
           set -e
@@ -177,7 +177,7 @@ spec:
         parameters:
           - name: nodes
       script:
-        image: alpine:3.19
+        image: alpine:3.23
         command: [sh]
         source: |
           set -e
@@ -249,7 +249,7 @@ spec:
           - name: force-rebuild
           - name: upstream-hash
       script:
-        image: alpine:3.19
+        image: alpine:3.23
         command: [sh]
         source: |
           set -e
@@ -359,7 +359,7 @@ spec:
           - name: nodes
           - name: ubuntu-version
       script:
-        image: alpine:3.19
+        image: alpine:3.23
         command: [sh]
         source: |
           set -e
