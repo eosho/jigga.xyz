@@ -12,9 +12,9 @@ data:
         - ArgoCD:
             - abbr: CD
               href: https://argocd.int.jigga.xyz
-        - OpenGist:
-            - abbr: OG
-              href: https://gist.jigga.xyz
+        - ArgoWorkflows:
+            - abbr: WF
+              href: https://workflows.int.jigga.xyz
 
   services.yaml: |
     - Infrastructure:
@@ -96,10 +96,6 @@ data:
             icon: https://raw.githubusercontent.com/open-webui/open-webui/main/static/favicon.png
             href: https://chat.int.jigga.xyz
             description: AI Chat Interface
-        - OpenGist:
-            icon: opengist
-            href: https://gist.jigga.xyz
-            description: Code Snippets
 
     - Databases:
         - pgAdmin:
