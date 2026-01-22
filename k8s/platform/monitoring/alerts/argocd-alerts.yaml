@@ -4,8 +4,9 @@ metadata:
   name: argocd-alerts
   namespace: monitoring
   labels:
-    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/name: argocd
     app.kubernetes.io/component: alerts
+    release: kube-prometheus-stack
 spec:
   groups:
     - name: argocd.rules

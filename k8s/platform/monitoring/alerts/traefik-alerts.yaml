@@ -4,8 +4,9 @@ metadata:
   name: traefik-alerts
   namespace: monitoring
   labels:
-    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/name: traefik
     app.kubernetes.io/component: alerts
+    release: kube-prometheus-stack
 spec:
   groups:
     - name: traefik.rules

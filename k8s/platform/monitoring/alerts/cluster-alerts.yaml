@@ -4,8 +4,9 @@ metadata:
   name: basic-cluster-alerts
   namespace: monitoring
   labels:
-    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/name: cluster
     app.kubernetes.io/component: alerts
+    release: kube-prometheus-stack
 spec:
   groups:
     - name: cluster.rules

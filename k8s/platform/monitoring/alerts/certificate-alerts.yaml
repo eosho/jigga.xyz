@@ -4,8 +4,9 @@ metadata:
   name: certificate-alerts
   namespace: monitoring
   labels:
-    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/name: cert-manager
     app.kubernetes.io/component: alerts
+    release: kube-prometheus-stack
 spec:
   groups:
     - name: certificate.rules

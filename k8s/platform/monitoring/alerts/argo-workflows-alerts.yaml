@@ -7,8 +7,7 @@ metadata:
   labels:
     app.kubernetes.io/name: argo-workflows
     app.kubernetes.io/component: alerts
-    prometheus: k8s
-    role: alert-rules
+    release: kube-prometheus-stack
 spec:
   groups:
     - name: argo-workflows.rules
@@ -29,7 +28,14 @@ spec:
             severity: warning
           annotations:
             summary: "There are {{ $value }} failed Argo Workflows"
-            description: "Failed workflows exist and have not been cleaned up. Check Argo UI for details."
+            description: |
+              Failed workflows exist and have not been cleaned up.
+
+              To find failed workflows:
+                kubectl get workflows -A --field-selector=status.phase=Failed
+
+              Or check the Argo UI: https://workflows.int.jigga.xyz/workflows?phase=Failed
+            runbook_url: "https://workflows.int.jigga.xyz/workflows?phase=Failed"
 
         - alert: ArgoWorkflowsHasErroredWorkflows
           expr: argo_workflows_gauge{status="Error"} > 0
@@ -38,7 +44,14 @@ spec:
             severity: warning
           annotations:
             summary: "There are {{ $value }} errored Argo Workflows"
-            description: "Errored workflows exist. Check Argo UI for details."
+            description: |
+              Errored workflows exist.
+
+              To find errored workflows:
+                kubectl get workflows -A --field-selector=status.phase=Error
+
+              Or check the Argo UI: https://workflows.int.jigga.xyz/workflows?phase=Error
+            runbook_url: "https://workflows.int.jigga.xyz/workflows?phase=Error"
 
         - alert: ArgoWorkflowsPendingTooLong
           expr: argo_workflows_gauge{status="Pending"} > 0
@@ -102,3 +115,27 @@ spec:
           annotations:
             summary: "Many workflow pods pending"
             description: "{{ $value }} workflow pods are pending. Check for resource constraints or scheduling issues."
+
+    # CronWorkflow-specific alerts (these have name labels)
+    - name: argo-cronworkflows.rules
+      rules:
+        - alert: PostgresBackupFailed
+          # Alert if postgres backup hasn't succeeded in 25 hours (daily backup + 1hr buffer)
+          expr: |
+            (time() - argo_workflows_workflowtemplate_triggered_total{name="postgres-backup", phase="Succeeded"}) > 90000
+            or
+            absent(argo_workflows_workflowtemplate_triggered_total{name="postgres-backup", phase="Succeeded"})
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "PostgreSQL daily backup has not succeeded"
+            description: |
+              The postgres-backup workflow has not completed successfully in over 25 hours.
+
+              Check recent backup workflows:
+                kubectl get workflows -n argo-workflows -l workflows.argoproj.io/workflow-template=postgres-backup --sort-by=.metadata.creationTimestamp
+
+              View logs in Loki:
+                {namespace="argo-workflows", workflow_template="postgres-backup"}
+            runbook_url: "https://workflows.int.jigga.xyz/workflow-templates/argo-workflows/postgres-backup"

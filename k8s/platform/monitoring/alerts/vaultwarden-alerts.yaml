@@ -4,8 +4,9 @@ metadata:
   name: vaultwarden-alerts
   namespace: monitoring
   labels:
-    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/name: vaultwarden
     app.kubernetes.io/component: alerts
+    release: kube-prometheus-stack
 spec:
   groups:
     - name: vaultwarden.rules
