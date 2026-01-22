@@ -11,27 +11,6 @@ spec:
   entrypoint: backup-cluster
   serviceAccountName: argo-workflow
 
-  # Custom metrics for monitoring backup success/failure
-  metrics:
-    prometheus:
-      - name: backup_last_completion_time
-        help: "Timestamp of last backup completion"
-        labels:
-          - key: workflow_name
-            value: "postgres-backup"
-          - key: status
-            value: "{{workflow.status}}"
-        gauge:
-          value: "{{workflow.creationTimestamp.s}}"
-      - name: backup_duration_seconds
-        help: "Duration of backup workflow in seconds"
-        labels:
-          - key: workflow_name
-            value: "postgres-backup"
-        when: "{{workflow.status}} == Succeeded"
-        gauge:
-          value: "{{workflow.duration}}"
-
   # NFS volume for backup storage (same as postgres namespace PVC)
   volumes:
     - name: backup
