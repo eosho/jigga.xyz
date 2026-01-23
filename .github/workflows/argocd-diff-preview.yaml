@@ -97,6 +97,12 @@ jobs:
             -e TIMEOUT=300 \
             dagandersen/argocd-diff-preview:v0.1.21
 
+      - name: Expand diff output
+        if: always() && hashFiles('output/diff.md') != ''
+        run: |
+          # Remove <details>/<summary> tags to show diffs expanded
+          sed -i 's/<details>//g; s/<\/details>//g; s/<summary>//g; s/<\/summary>//g' output/diff.md
+
       - name: Post diff as PR comment
         if: always() && hashFiles('output/diff.md') != ''
         run: |
