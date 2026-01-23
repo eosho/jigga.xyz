@@ -270,9 +270,9 @@ chunksCache:
 resultsCache:
   enabled: false
 
-# Keep canary enabled for helm test validation
+# Disable canary
 lokiCanary:
-  enabled: true
+  enabled: false
 
 # Disable helm test
 test:
@@ -352,6 +352,22 @@ alloy:
         rule {
           source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
           target_label  = "app"
+        }
+        // service_name label for Grafana Explore Logs UI
+        // Priority: app.kubernetes.io/name > app label > container name
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "service_name"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          regex         = "(.+)"
+          target_label  = "service_name"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+          regex         = "(.+)"
+          target_label  = "service_name"
         }
         // Argo Workflows labels for log querying from UI
         rule {
