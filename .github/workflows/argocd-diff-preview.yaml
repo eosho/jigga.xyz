@@ -1,0 +1,99 @@
+# ArgoCD Diff Preview - Renders manifest diffs on PRs
+# Uses ephemeral Kind cluster with ArgoCD to generate accurate diffs
+# Docs: https://dag-andersen.github.io/argocd-diff-preview/
+
+name: ArgoCD Diff Preview
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "k8s/**"
+      - ".github/workflows/argocd-diff-preview.yaml"
+
+concurrency:
+  group: argocd-diff-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  diff-preview:
+    name: Generate Diff
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          path: pull-request
+
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+
+      # Required for private repo access - ArgoCD needs SSH credentials
+      # to clone the repo when rendering applications
+      - name: Prepare secrets for private repo
+        run: |
+          mkdir -p secrets
+          SSH_PRIVATE_KEY_B64=$(echo "${{ secrets.ARGOCD_DIFF_SSH_KEY }}" | base64 -w 0)
+          URL_B64=$(echo -n "git@github.com:${{ github.repository }}.git" | base64 -w 0)
+          cat > secrets/repo-creds.yaml <<EOF
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: private-repo-creds
+            namespace: argocd
+            labels:
+              argocd.argoproj.io/secret-type: repo-creds
+          data:
+            type: $(echo -n "git" | base64 -w 0)
+            url: "${URL_B64}"
+            sshPrivateKey: "${SSH_PRIVATE_KEY_B64}"
+          EOF
+
+      - name: Generate ArgoCD Diff
+        run: |
+          docker run \
+            --network=host \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v $(pwd)/main:/base-branch \
+            -v $(pwd)/pull-request:/target-branch \
+            -v $(pwd)/secrets:/secrets \
+            -v $(pwd)/output:/output \
+            -e TARGET_BRANCH=${{ github.head_ref }} \
+            -e REPO=${{ github.repository }} \
+            -e BASE_BRANCH=main \
+            -e AUTO_DETECT_FILES_CHANGED=true \
+            -e WATCH_IF_NO_WATCH_PATTERN_FOUND=true \
+            -e FILE_REGEX="k8s/clusters/homelab/apps/.*\.yaml$" \
+            -e SELECTOR="app.kubernetes.io/part-of=homelab" \
+            -e TITLE="ArgoCD Diff Preview" \
+            -e TIMEOUT=300 \
+            dagandersen/argocd-diff-preview:v0.1.21
+
+      - name: Post diff as PR comment
+        if: always() && hashFiles('output/diff.md') != ''
+        run: |
+          gh pr comment ${{ github.event.number }} \
+            --repo ${{ github.repository }} \
+            --body-file output/diff.md \
+            --edit-last || \
+          gh pr comment ${{ github.event.number }} \
+            --repo ${{ github.repository }} \
+            --body-file output/diff.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload diff artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: argocd-diff
+          path: output/
+          retention-days: 7
+          if-no-files-found: ignore
