@@ -7,7 +7,7 @@ resource "helm_release" "kube_prometheus_stack" {
   name       = "kube-prometheus-stack"
   repository = "https://prometheus-community.github.io/helm-charts"
   chart      = "kube-prometheus-stack"
-  version    = "80.10.0"
+  version    = "81.2.1"
   namespace  = "monitoring"
 
   create_namespace = true
@@ -15,11 +15,12 @@ resource "helm_release" "kube_prometheus_stack" {
   timeout          = 900 # 15 minutes
 
   values = [<<EOF
-# Enable CRD upgrade job to keep CRDs in sync with chart version
+# CRDs managed by chart, upgrade job disabled (preview feature, prone to failures)
+# CRDs are still upgraded when chart version changes
 crds:
   enabled: true
   upgradeJob:
-    enabled: true
+    enabled: false
 
 grafana:
   adminPassword: "${var.grafana_admin_password}"
@@ -66,7 +67,7 @@ grafana:
       url: http://loki-gateway.monitoring.svc.cluster.local
     # - name: Tempo
     #   type: tempo
-    #   url: http://tempo.monitoring.svc.cluster.local:3100
+    #   url: http://tempo.monitoring.svc.cluster.local:3200
 
 prometheus:
   prometheusSpec:
@@ -237,6 +238,7 @@ loki:
           period: 24h
   limits_config:
     retention_period: 168h
+    volume_enabled: true
 
 # Single binary deployment
 singleBinary:
@@ -428,32 +430,52 @@ EOF
 #   name       = "tempo"
 #   repository = "https://grafana.github.io/helm-charts"
 #   chart      = "tempo"
-#   version    = "1.7.1"  # Updated version
+#   version    = "1.24.3"
 #   namespace  = "monitoring"
 #
-#   wait  = true
+#   wait    = true
 #   timeout = 300 # 5 minutes
 #
 #   values = [<<EOF
 # tempo:
+#   reportingEnabled: false
+#   retention: 72h
 #   storage:
 #     trace:
 #       backend: local
 #       local:
 #         path: /var/tempo/traces
-#   retention: 24h
-#   reportingEnabled: false
+#       wal:
+#         path: /var/tempo/wal
+#   # OTLP receiver for traces
+#   receivers:
+#     otlp:
+#       protocols:
+#         grpc:
+#           endpoint: "0.0.0.0:4317"
+#         http:
+#           endpoint: "0.0.0.0:4318"
 #
-# multitenancy:
-#   enabled: false
+# # Persistence for trace storage
+# persistence:
+#   enabled: true
+#   storageClassName: ceph-rbd
+#   size: 5Gi
 #
+# # Resources
 # resources:
 #   requests:
-#     cpu: 100m
+#     cpu: 50m
 #     memory: 128Mi
 #   limits:
-#     cpu: 1
-#     memory: 1Gi
+#     cpu: 500m
+#     memory: 512Mi
+#
+# # ServiceMonitor for Prometheus
+# serviceMonitor:
+#   enabled: true
+#   additionalLabels:
+#     release: kube-prometheus-stack
 # EOF
 #   ]
 # }
