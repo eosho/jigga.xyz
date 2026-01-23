@@ -91,8 +91,6 @@ jobs:
             -e BASE_BRANCH=main \
             -e AUTO_DETECT_FILES_CHANGED=true \
             -e WATCH_IF_NO_WATCH_PATTERN_FOUND=true \
-            -e FILE_REGEX="k8s/clusters/homelab/apps/.*\.yaml$" \
-            -e SELECTOR="app.kubernetes.io/part-of=homelab" \
             -e TITLE="ArgoCD Diff Preview" \
             -e TIMEOUT=300 \
             dagandersen/argocd-diff-preview:v0.1.21
