@@ -7,6 +7,8 @@ metadata:
     app: homepage
   annotations:
     reloader.stakater.com/auto: "true"
+    # Test annotation for argocd-diff-preview
+    argocd-diff-preview/test: "2026-01-23"
 spec:
   replicas: 1
   selector:
