@@ -1,0 +1,51 @@
+# Custom ArgoCD Helm values for argocd-diff-preview
+# Includes KSOPS support for encrypted secrets
+
+repoServer:
+  # Environment variables for SOPS/KSOPS
+  env:
+    - name: XDG_CONFIG_HOME
+      value: /.config
+    - name: SOPS_AGE_KEY_FILE
+      value: /.config/sops/age/keys.txt
+
+  # Volume mounts for KSOPS
+  volumeMounts:
+    - mountPath: /usr/local/bin/kustomize
+      name: custom-tools
+      subPath: kustomize
+    - mountPath: /usr/local/bin/ksops
+      name: custom-tools
+      subPath: ksops
+    - mountPath: /usr/local/bin/sops
+      name: custom-tools
+      subPath: sops
+    - mountPath: /.config/sops/age
+      name: sops-age
+
+  # Volumes for custom tools and AGE key
+  volumes:
+    - name: custom-tools
+      emptyDir: {}
+    - name: sops-age
+      secret:
+        secretName: sops-age
+
+  # Init container to install KSOPS, Kustomize, and SOPS
+  initContainers:
+    - name: install-ksops
+      image: alpine:3.19
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          set -e
+          echo "Downloading KSOPS and Kustomize..."
+          wget -qO- https://github.com/viaduct-ai/kustomize-sops/releases/download/v4.3.2/ksops_4.3.2_Linux_x86_64.tar.gz | tar xz -C /custom-tools
+          wget -qO- https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.3.0/kustomize_v5.3.0_linux_amd64.tar.gz | tar xz -C /custom-tools
+          echo "Downloading SOPS..."
+          wget -qO /custom-tools/sops https://github.com/getsops/sops/releases/download/v3.11.0/sops-v3.11.0.linux.amd64
+          chmod +x /custom-tools/ksops /custom-tools/kustomize /custom-tools/sops
+          echo "Done."
+      volumeMounts:
+        - mountPath: /custom-tools
+          name: custom-tools

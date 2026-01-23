@@ -40,6 +40,8 @@ jobs:
       - name: Prepare secrets for private repo
         run: |
           mkdir -p secrets
+
+          # SSH credentials for private repo
           SSH_PRIVATE_KEY_B64=$(echo "${{ secrets.ARGOCD_DIFF_SSH_KEY }}" | base64 -w 0)
           URL_B64=$(echo -n "git@github.com:${{ github.repository }}.git" | base64 -w 0)
           cat > secrets/repo-creds.yaml <<EOF
@@ -56,6 +58,20 @@ jobs:
             sshPrivateKey: "${SSH_PRIVATE_KEY_B64}"
           EOF
 
+          # SOPS AGE key for KSOPS decryption (dummy key for diff preview)
+          # The ephemeral cluster doesn't need real secrets, just valid KSOPS config
+          cat > secrets/sops-age.yaml <<EOF
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: sops-age
+            namespace: argocd
+          stringData:
+            keys.txt: |
+              # AGE-SECRET-KEY-DUMMY-FOR-DIFF-PREVIEW
+              ${{ secrets.SOPS_AGE_KEY }}
+          EOF
+
       - name: Generate ArgoCD Diff
         run: |
           docker run \
@@ -64,6 +80,7 @@ jobs:
             -v $(pwd)/main:/base-branch \
             -v $(pwd)/pull-request:/target-branch \
             -v $(pwd)/secrets:/secrets \
+            -v $(pwd)/pull-request/.github/argocd-values.yaml:/argocd-values.yaml \
             -v $(pwd)/output:/output \
             -e TARGET_BRANCH=${{ github.head_ref }} \
             -e REPO=${{ github.repository }} \
@@ -74,6 +91,7 @@ jobs:
             -e SELECTOR="app.kubernetes.io/part-of=homelab" \
             -e TITLE="ArgoCD Diff Preview" \
             -e TIMEOUT=300 \
+            -e ARGOCD_CHART_YAML_VALUES=/argocd-values.yaml \
             dagandersen/argocd-diff-preview:v0.1.21
 
       - name: Post diff as PR comment
