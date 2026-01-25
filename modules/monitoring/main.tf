@@ -60,6 +60,27 @@ grafana:
         gnetId: 1860
         revision: 30
         datasource: Prometheus
+      # UnPoller / UniFi dashboards
+      unpoller-client-dpi:
+        gnetId: 11310
+        revision: 5
+        datasource: Prometheus
+      unpoller-network-sites:
+        gnetId: 11311
+        revision: 5
+        datasource: Prometheus
+      unpoller-usw-insights:
+        gnetId: 11312
+        revision: 9
+        datasource: Prometheus
+      unpoller-uap-insights:
+        gnetId: 11314
+        revision: 10
+        datasource: Prometheus
+      unpoller-client-insights:
+        gnetId: 11315
+        revision: 9
+        datasource: Prometheus
   # Additional data sources
   additionalDataSources:
     - name: Loki
