@@ -18,6 +18,12 @@ spec:
   entrypoint: build-templates
   serviceAccountName: argo-workflow
 
+  # Override security context to allow package installation and SSH access
+  # This workflow needs root to run apk and access SSH keys
+  securityContext:
+    runAsNonRoot: false
+    runAsUser: 0
+
   arguments:
     parameters:
       - name: ubuntu-version
