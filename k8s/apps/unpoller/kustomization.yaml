@@ -3,9 +3,11 @@ kind: Kustomization
 
 resources:
   - namespace.yaml
-  - config/
   - workload/
   - networking/
+
+generators:
+  - secret-generator.yaml
 
 labels:
   - pairs:
