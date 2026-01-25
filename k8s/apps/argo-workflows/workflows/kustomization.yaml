@@ -4,21 +4,18 @@ kind: Kustomization
 resources:
   # Config
   - config/postgres-scripts.yaml
-  - config/proxmox-scripts.yaml
 
   # WorkflowTemplates
   - templates/hello-world.yaml
   - templates/postgres-backup.yaml
   - templates/postgres-restore.yaml
   - templates/cluster-health-check.yaml
-  - templates/proxmox-template-builder.yaml
 
   # CronWorkflows
   - cron/postgres-daily-backup.yaml
   - cron/cluster-weekly-health.yaml
   - cron/cleanup-completed-jobs.yaml
   - cron/cleanup-evicted-pods.yaml
-  - cron/proxmox-weekly-template-build.yaml
 
   # RBAC
   - rbac/workflow-permissions.yaml
