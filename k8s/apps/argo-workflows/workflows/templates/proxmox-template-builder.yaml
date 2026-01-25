@@ -199,6 +199,9 @@ spec:
           set -e
           apk add --no-cache openssh-client jq
 
+          # Fix SSH key permissions (Kubernetes secrets may have wrong mode due to fsGroup)
+          chmod 600 /root/.ssh/id_rsa
+
           NODES='{{inputs.parameters.nodes}}'
 
           echo "Checking connectivity to Proxmox nodes..."
@@ -275,6 +278,9 @@ spec:
         source: |
           set -e
           apk add --no-cache openssh-client
+
+          # Fix SSH key permissions (Kubernetes secrets may have wrong mode due to fsGroup)
+          chmod 600 /root/.ssh/id_rsa
 
           NODE="{{inputs.parameters.node}}"
           VERSION="{{inputs.parameters.ubuntu-version}}"
@@ -390,6 +396,9 @@ spec:
         source: |
           set -e
           apk add --no-cache openssh-client jq
+
+          # Fix SSH key permissions (Kubernetes secrets may have wrong mode due to fsGroup)
+          chmod 600 /root/.ssh/id_rsa
 
           NODES='{{inputs.parameters.nodes}}'
           VERSION="{{inputs.parameters.ubuntu-version}}"
