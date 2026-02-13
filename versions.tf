@@ -7,7 +7,7 @@ terraform {
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"
-      version = "~> 0.93"
+      version = "~> 0.95"
     }
     kubernetes = {
       source  = "hashicorp/kubernetes"
@@ -23,7 +23,7 @@ terraform {
     }
     tailscale = {
       source  = "tailscale/tailscale"
-      version = "~> 0.25"
+      version = "~> 0.27"
     }
     local = {
       source  = "hashicorp/local"
