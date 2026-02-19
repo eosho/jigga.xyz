@@ -211,7 +211,7 @@ resource "helm_release" "loki" {
   name       = "loki"
   repository = "https://grafana.github.io/helm-charts"
   chart      = "loki"
-  version    = "6.51.0"
+  version    = "6.53.0"
   namespace  = "monitoring"
 
   wait    = true
@@ -303,7 +303,7 @@ resource "helm_release" "alloy" {
   name       = "alloy"
   repository = "https://grafana.github.io/helm-charts"
   chart      = "alloy"
-  version    = "1.5.2"
+  version    = "1.6.0"
   namespace  = "monitoring"
 
   wait    = true
